@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package im;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+service Gateway {
+    rpc Call (Request) returns (Response) {
+        option (google.api.http) = {
+            post: "/startlandapi"
+            body: "*"
+        };
+    }
+}
+
+// 示例：
+// 请求地址：http://im.gateway.com/a/ap8MBBDcW3u
+// 请求结构：
+//{
+//    "com": {
+//        "dev_id": "DEV-ABC123-XYZ456",      // 设备 id
+//        "dev_type": "ios",                  // 设备类型 android, ios, pc
+//        "app_ver": "v1.0.1",                // App 版本
+//        "os_ver": "ios8",                   // 操作系统版本
+//        "jwt_token": ""                     // JWT Token
+//    },
+//    "req": {
+//        "module": "im.ImContacts.com",   // 微服务的功能模块名称, 通常module起名采用 {{proto package}}.{{proto service}}}.com
+//        "method": "Login",               // 微服务的调用方法（接口）名称,
+//        "params": {                      // 请求参数（protobuf.Struct，JSON对象）
+//        }
+//    }
+//}
+message Request {
+    // 公共参数
+    Com com = 1 [(validate.rules).message.required = true];
+
+    // 请求参数
+    Req req = 2 [(validate.rules).message.required = true];
+}
+
+message Com {
+    string dev_id = 1;     // 设备id
+    string dev_type = 2;   // 设备类型 android, ios, pc
+    string app_ver = 3;    // App 版本
+    string os_ver = 4;     // 操作系统版本
+    string jwt_token = 5;  // JWT Token
+}
+
+message Req {
+    string module = 1 [(validate.rules).string.min_len = 1];  // 微服务的功能模块名称，必传
+    string method = 2 [(validate.rules).string.min_len = 1];  // 微服务的调用方法（接口）名称，必传
+    google.protobuf.Struct params = 3 [(validate.rules).message.required = true];  // 请求参数，必传
+}
+
+message Response {
+    string data = 1;
+}
+
+// 示例：
+// 响应结构：
+// {
+//    "code": 0,
+//    "msg": "ok",
+//    "data": "..."
+//}
+message EncryptedResponse {
+    int32 code = 1;   // 错误码
+    string msg = 2;   // 响应消息
+    string data = 3;  // 响应数据（加密）
+}
+
+message XrpcErrors {
+    int32 code = 1;
+    string reason = 2;
+    string message = 3;
+    map<string, string> metadata = 4;
+};
+

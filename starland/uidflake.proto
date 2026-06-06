@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+service Uidflake {
+  rpc GenerateID (GenerateIDRequest) returns (GenerateIDRsp);
+
+  rpc GenerateBase62ID (GenerateIDRequest) returns (GenerateBase62IDRsp);
+}
+
+message GenerateIDRequest {
+  uint32 count = 1;
+  string bid = 2;
+}
+
+message GenerateIDRsp {
+  repeated uint64 ids = 1;
+}
+
+message GenerateBase62IDRsp {
+  repeated string ids = 1;
+}

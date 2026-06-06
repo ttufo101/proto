@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+service Login {
+  // 邮箱密码注册
+  rpc Register (RegisterRequest) returns (LoginResponse);
+
+  // 邮箱密码登录
+  rpc Login (LoginRequest) returns (LoginResponse);
+
+  // 长 token 刷新长短 token
+  rpc RefreshToken (RefreshTokenRequest) returns (LoginResponse);
+
+  // 获取找回密码邮箱验证码
+  rpc GetPwdRecoveryCode (GetPwdRecoveryCodeRequest) returns (GetPwdRecoveryCodeResponse);
+
+  // 使用邮箱验证码重置密码
+  rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
+}
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  uint64 uid = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+  int64 access_expire_at = 4;
+  int64 refresh_expire_at = 5;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message GetPwdRecoveryCodeRequest {
+  string email = 1;
+}
+
+message GetPwdRecoveryCodeResponse {
+  bool success = 1;
+  int32 expire_seconds = 2;
+}
+
+message ResetPasswordRequest {
+  string email = 1;
+  string code = 2;
+  string new_password = 3;
+}
+
+message ResetPasswordResponse {
+  bool success = 1;
+}

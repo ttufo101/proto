@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+service Vfcode {
+  // 获取短信验证码
+  rpc SendSmsCode (SendSmsCodeRequest) returns (SendCodeResponse);
+
+  // 校验短信验证码
+  rpc VerifySmsCode (VerifySmsCodeRequest) returns (VerifyCodeResponse);
+
+  // 获取邮箱验证码
+  rpc SendEmailCode (SendEmailCodeRequest) returns (SendCodeResponse);
+
+  // 校验邮箱验证码
+  rpc VerifyEmailCode (VerifyEmailCodeRequest) returns (VerifyCodeResponse);
+}
+
+message SendSmsCodeRequest {
+  string phone = 1;
+  string scene = 2;
+}
+
+message VerifySmsCodeRequest {
+  string phone = 1;
+  string scene = 2;
+  string code = 3;
+}
+
+message SendEmailCodeRequest {
+  string email = 1;
+  string scene = 2;
+}
+
+message VerifyEmailCodeRequest {
+  string email = 1;
+  string scene = 2;
+  string code = 3;
+}
+
+message SendCodeResponse {
+  bool success = 1;
+  int32 expire_seconds = 2;
+}
+
+message VerifyCodeResponse {
+  bool success = 1;
+}
