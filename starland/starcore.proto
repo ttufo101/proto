@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+service Starcore {
+  // 查询套餐列表。
+  rpc GetPlans (GetPlansRequest) returns (GetPlansResponse);
+
+  // 获取当前登录用户信息。
+  rpc GetUserInfo (GetUserInfoRequest) returns (GetUserInfoResponse);
+
+  // 获取代理节点配置。
+  rpc GetLinks (GetLinksRequest) returns (GetLinksResponse);
+
+  // 上报当前登录用户的流量使用量。
+  rpc ReportTraffic (ReportTrafficRequest) returns (ReportTrafficResponse);
+}
+
+message GetPlansRequest {
+}
+
+message GetPlansResponse {
+  repeated Plan plans = 1; // 套餐列表。
+}
+
+message GetUserInfoRequest {
+}
+
+message GetUserInfoResponse {
+  string username = 1;                  // 用户名，当前使用登录邮箱。
+  Plan current_plan = 2;                // 当前订购套餐，未订购时为空。
+  int32 remaining_days = 3;             // 时间维度套餐剩余天数，由服务端按订阅结束时间计算。
+  uint64 remaining_traffic_bytes = 4;   // 流量维度套餐剩余流量字节数。
+  string link_url = 5;                  // 固定 link 地址。
+}
+
+message GetLinksRequest {
+}
+
+message GetLinksResponse {
+  string content = 1; // conf/proxy.yaml 原始文件内容。
+}
+
+message ReportTrafficRequest {
+  string report_id = 1;       // 上报唯一 ID，同一用户下用于幂等防重放。
+  uint64 uplink_bytes = 2;    // 上行流量字节数。
+  uint64 downlink_bytes = 3;  // 下行流量字节数。
+}
+
+message ReportTrafficResponse {
+  uint64 traffic_used_bytes = 1;       // 更新后的已用流量字节数。
+  uint64 remaining_traffic_bytes = 2;  // 更新后的剩余流量字节数。
+}
+
+message Plan {
+  string plan_id = 1;           // 套餐 ID。
+  string name = 2;              // 套餐名称。
+  string plan_type = 3;         // 套餐类型：time 表示时间维度，traffic 表示流量维度。
+  int32 duration_days = 4;      // 套餐有效天数，流量维度套餐为 0。
+  uint64 traffic_bytes = 5;     // 套餐总流量字节数，时间维度套餐为 0。
+  int32 speed_limit_mbps = 6;   // 限速 Mbps，0 表示不限速。
+  int32 max_devices = 7;        // 最大同时在线设备数。
+  string description = 8;       // 套餐描述。
+}

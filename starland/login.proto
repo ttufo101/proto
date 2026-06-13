@@ -14,50 +14,39 @@ service Login {
   // 长 token 刷新长短 token
   rpc RefreshToken (RefreshTokenRequest) returns (LoginResponse);
 
-  // 获取找回密码邮箱验证码
-  rpc GetPwdRecoveryCode (GetPwdRecoveryCodeRequest) returns (GetPwdRecoveryCodeResponse);
-
   // 使用邮箱验证码重置密码
   rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
 }
 
 message RegisterRequest {
-  string email = 1;
-  string password = 2;
+  string email = 1;     // 登录邮箱，服务端会归一化为小写。
+  string password = 2;  // 登录密码。
+  string code = 3;      // 注册邮箱验证码。
 }
 
 message LoginRequest {
-  string email = 1;
-  string password = 2;
+  string email = 1;     // 登录邮箱，服务端会归一化为小写。
+  string password = 2;  // 登录密码。
 }
 
 message LoginResponse {
-  uint64 uid = 1;
-  string access_token = 2;
-  string refresh_token = 3;
-  int64 access_expire_at = 4;
-  int64 refresh_expire_at = 5;
+  string uid = 1;                 // 用户ID，使用 uidflake 生成的 base62 字符串。
+  string access_token = 2;        // 短 token，用于访问受保护接口。
+  string refresh_token = 3;       // 长 token，用于刷新登录态。
+  int64 access_expire_at = 4;     // 短 token 过期时间，Unix 秒级时间戳。
+  int64 refresh_expire_at = 5;    // 长 token 过期时间，Unix 秒级时间戳。
 }
 
 message RefreshTokenRequest {
-  string refresh_token = 1;
-}
-
-message GetPwdRecoveryCodeRequest {
-  string email = 1;
-}
-
-message GetPwdRecoveryCodeResponse {
-  bool success = 1;
-  int32 expire_seconds = 2;
+  string refresh_token = 1;  // 长 token。
 }
 
 message ResetPasswordRequest {
-  string email = 1;
-  string code = 2;
-  string new_password = 3;
+  string email = 1;         // 已注册的登录邮箱。
+  string code = 2;          // 邮箱验证码。
+  string new_password = 3;  // 新登录密码。
 }
 
 message ResetPasswordResponse {
-  bool success = 1;
+  bool success = 1;  // 是否成功重置密码。
 }
