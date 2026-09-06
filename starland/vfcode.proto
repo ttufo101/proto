@@ -5,12 +5,6 @@ package starland;
 option go_package = "github.com/ttufo101/api/starland;starland";
 
 service Vfcode {
-  // 获取短信验证码
-  rpc SendSmsCode (SendSmsCodeRequest) returns (SendCodeResponse);
-
-  // 校验短信验证码
-  rpc VerifySmsCode (VerifySmsCodeRequest) returns (VerifyCodeResponse);
-
   // 获取邮箱验证码
   rpc SendEmailCode (SendEmailCodeRequest) returns (SendCodeResponse);
 
@@ -18,33 +12,23 @@ service Vfcode {
   rpc VerifyEmailCode (VerifyEmailCodeRequest) returns (VerifyCodeResponse);
 }
 
-message SendSmsCodeRequest {
-  string phone = 1;
-  string scene = 2;
-}
-
-message VerifySmsCodeRequest {
-  string phone = 1;
-  string scene = 2;
-  string code = 3;
-}
 
 message SendEmailCodeRequest {
-  string email = 1;
-  string scene = 2;
-}
-
-message VerifyEmailCodeRequest {
-  string email = 1;
-  string scene = 2;
-  string code = 3;
+  string email = 1;  // 接收验证码的邮箱地址；服务端校验格式并按小写地址存储验证码。
+  string scene = 2;  // 验证码业务场景标识；与邮件渠道及邮箱共同隔离验证码、发送冷却和每日限额，校验时须传相同值。
 }
 
 message SendCodeResponse {
-  bool success = 1;
-  int32 expire_seconds = 2;
+  bool success = 1;         // 是否成功生成、保存并发送验证码。
+  int32 expire_seconds = 2; // 验证码有效期，单位为秒。
+}
+
+message VerifyEmailCodeRequest {
+  string email = 1;  // 接收验证码的邮箱地址，须与发送时一致；大小写不敏感。
+  string scene = 2;  // 验证码业务场景标识，须与发送时一致；login 服务使用 register（注册）和 pwd_recovery（找回密码）。
+  string code = 3;   // 用户收到的邮箱验证码；校验成功后立即失效。
 }
 
 message VerifyCodeResponse {
-  bool success = 1;
+  bool success = 1;  // 验证码是否有效且匹配。
 }

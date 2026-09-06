@@ -16,6 +16,15 @@ service Starcore {
 
   // 上报当前登录用户的流量使用量。
   rpc ReportTraffic (ReportTrafficRequest) returns (ReportTrafficResponse);
+
+  // 供 order 服务查询可购买套餐。
+  rpc GetPlanForPurchase (GetPlanForPurchaseRequest) returns (GetPlanForPurchaseResponse);
+
+  // 供 order 服务幂等发放套餐权益。
+  rpc GrantSubscription (GrantSubscriptionRequest) returns (GrantSubscriptionResponse);
+
+  // 供 order 管理工具按订单号幂等撤销套餐权益。
+  rpc RevokeSubscription (RevokeSubscriptionRequest) returns (RevokeSubscriptionResponse);
 }
 
 message GetPlansRequest {
@@ -34,13 +43,17 @@ message GetUserInfoResponse {
   int32 remaining_days = 3;             // 时间维度套餐剩余天数，由服务端按订阅结束时间计算。
   uint64 remaining_traffic_bytes = 4;   // 流量维度套餐剩余流量字节数。
   string link_url = 5;                  // 固定 link 地址。
+  Subscription time_subscription = 6;
+  Subscription traffic_subscription = 7;
+  string active_entitlement_type = 8;
+  bool unlimited = 9;
 }
 
 message GetLinksRequest {
 }
 
 message GetLinksResponse {
-  string content = 1; // conf/proxy.yaml 原始文件内容。
+  string content = 1; // conf/proxy.yaml 原始文件内容的 base64 编码，客户端需先解码再使用。
 }
 
 message ReportTrafficRequest {
@@ -52,6 +65,8 @@ message ReportTrafficRequest {
 message ReportTrafficResponse {
   uint64 traffic_used_bytes = 1;       // 更新后的已用流量字节数。
   uint64 remaining_traffic_bytes = 2;  // 更新后的剩余流量字节数。
+  string entitlement_type = 3;
+  bool unlimited = 4;
 }
 
 message Plan {
@@ -63,4 +78,35 @@ message Plan {
   int32 speed_limit_mbps = 6;   // 限速 Mbps，0 表示不限速。
   int32 max_devices = 7;        // 最大同时在线设备数。
   string description = 8;       // 套餐描述。
+  uint64 price_amount = 9;      // 价格，最小货币单位。
+  string currency = 10;         // 币种。
+}
+
+message Subscription {
+  Plan plan = 1;
+  int64 starts_at = 2;
+  int64 expires_at = 3;
+  int32 remaining_days = 4;
+  uint64 traffic_total_bytes = 5;
+  uint64 traffic_used_bytes = 6;
+  uint64 remaining_traffic_bytes = 7;
+}
+
+message GetPlanForPurchaseRequest { string plan_id = 1; }
+message GetPlanForPurchaseResponse { Plan plan = 1; }
+
+message GrantSubscriptionRequest {
+  string order_no = 1;
+  string uid = 2;
+  Plan plan = 3;
+}
+message GrantSubscriptionResponse { bool success = 1; }
+
+message RevokeSubscriptionRequest {
+  string order_no = 1; // 要撤销的权益发放订单号。
+}
+
+message RevokeSubscriptionResponse {
+  bool success = 1;          // 是否已处于撤销成功状态。
+  bool already_revoked = 2;  // 调用前是否已经撤销，用于幂等重试。
 }

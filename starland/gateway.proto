@@ -49,6 +49,7 @@ message Com {
     string app_ver = 3;    // App 版本
     string os_ver = 4;     // 操作系统版本
     string jwt_token = 5;  // JWT Token
+    string uid = 6;        // 游客标识；公开接口可使用，不能替代登录 Token 中的用户身份。
 }
 
 message Req {
@@ -80,4 +81,3 @@ message XrpcErrors {
     string message = 3;
     map<string, string> metadata = 4;
 };
-

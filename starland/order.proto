@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+service Order {
+  // 为当前登录用户创建待支付套餐订单；相同幂等键返回同一订单。
+  rpc CreateOrder (CreateOrderRequest) returns (OrderResponse);
+
+  // 查询当前登录用户的指定订单。
+  rpc GetOrder (GetOrderRequest) returns (OrderResponse);
+
+  // 分页查询当前登录用户的订单列表。
+  rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse);
+
+  // 为待支付订单创建指定支付渠道的支付参数。
+  rpc CreatePayment (CreatePaymentRequest) returns (CreatePaymentResponse);
+
+  // 接收支付渠道服务端通知；无需登录 Token，但必须通过渠道签名校验。
+  rpc PaymentCallback (PaymentCallbackRequest) returns (PaymentCallbackResponse);
+}
+
+// 创建订单请求。
+message CreateOrderRequest {
+  string plan_id = 1;          // 要购买的套餐稳定业务 ID；价格与权益由服务端查询。
+  string idempotency_key = 2;  // 客户端生成的幂等键；同一用户下最长 64 个字符。
+}
+
+// 查询单个订单请求。
+message GetOrderRequest {
+  string order_no = 1;  // 服务端生成的订单号。
+}
+
+// 分页查询订单请求。
+message ListOrdersRequest {
+  int32 page = 1;       // 页码，从 1 开始；小于 1 时按 1 处理。
+  int32 page_size = 2;  // 每页数量，范围 1 至 100；非法值使用服务端默认值。
+}
+
+// 创建支付请求。
+message CreatePaymentRequest {
+  string order_no = 1;         // 当前用户的待支付订单号。
+  string payment_channel = 2;  // 支付渠道标识，例如具体支付适配器名称。
+}
+
+// 创建支付响应。
+message CreatePaymentResponse {
+  string order_no = 1;         // 对应的订单号。
+  string payment_payload = 2;  // 支付渠道生成的客户端支付参数或支付链接。
+  int64 expire_at = 3;         // 订单支付截止时间，Unix 秒级时间戳。
+}
+
+// 支付渠道回调请求。
+message PaymentCallbackRequest {
+  string payment_channel = 1;   // 支付渠道标识，必须与创建支付时一致。
+  string event_id = 2;          // 支付渠道事件唯一 ID，用于回调幂等。
+  string order_no = 3;          // Starland 订单号。
+  string payment_trade_no = 4;  // 支付渠道交易流水号。
+  uint64 amount = 5;            // 实付金额，使用币种最小单位，必须与订单金额一致。
+  string currency = 6;          // 支付币种，必须与订单币种一致。
+  int64 paid_at = 7;            // 支付成功时间，Unix 秒级时间戳。
+  string signature = 8;         // 支付渠道签名；当前通用实现为 HMAC-SHA256 小写十六进制。
+}
+
+// 支付回调处理结果。
+message PaymentCallbackResponse {
+  bool success = 1;  // 回调是否完成幂等处理并成功发放权益。
+}
+
+// 订单详情。
+message OrderResponse {
+  string order_no = 1;      // 服务端生成的订单号。
+  string uid = 2;           // 订单所属用户 ID。
+  string plan_id = 3;       // 购买的套餐稳定业务 ID。
+  string plan_name = 4;     // 创建订单时保存的套餐名称快照。
+  string plan_type = 5;     // 套餐类型：time 时间套餐，traffic 流量套餐。
+  uint64 price_amount = 6;  // 订单金额，使用币种最小单位。
+  string currency = 7;      // 订单币种，例如 CNY。
+  string status = 8;        // 订单状态：pending、paying、paid、success、closed、fulfill_failed、refund_pending、refunded 或 revoked（仅人工订单）。
+  int64 expire_at = 9;      // 订单支付截止时间，Unix 秒级时间戳。
+  int64 paid_at = 10;       // 支付成功时间，未支付时为 0；Unix 秒级时间戳。
+}
+
+// 订单列表响应。
+message ListOrdersResponse {
+  repeated OrderResponse orders = 1;  // 当前页订单，按创建时间倒序排列。
+}
