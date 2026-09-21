@@ -1,0 +1,434 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+// Admin 是后端管理服务，仅管理员账号可调用。
+// 所有接口均要求携带 access token，且账号角色为 admin；鉴权在服务内部完成。
+service Admin {
+  // 分页查询注册用户，支持按邮箱或 uid 搜索。
+  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
+
+  // 按邮箱查询用户的时间和流量订阅快照。
+  rpc GetUserSubscriptions (GetUserSubscriptionsRequest) returns (GetUserSubscriptionsResponse);
+
+  // 查询全部套餐（含已停用）。
+  rpc ListPlans (ListPlansRequest) returns (ListPlansResponse);
+
+  // 新增套餐。
+  rpc CreatePlan (CreatePlanRequest) returns (CreatePlanResponse);
+
+  // 全量更新套餐（含启用/停用）。
+  rpc UpdatePlan (UpdatePlanRequest) returns (UpdatePlanResponse);
+
+  // 按邮箱给用户发放套餐权益（迁移自 orderadmin grant）。
+  rpc GrantUserPlan (GrantUserPlanRequest) returns (GrantUserPlanResponse);
+
+  // 直接修改用户现有订阅的到期时间或流量额度。
+  rpc UpdateUserSubscription (UpdateUserSubscriptionRequest) returns (UpdateUserSubscriptionResponse);
+
+  // 按订单号撤销套餐权益（迁移自 orderadmin revoke）。
+  rpc RevokeUserPlan (RevokeUserPlanRequest) returns (RevokeUserPlanResponse);
+
+  // 查看代理节点配置全文。
+  rpc GetProxyConfig (GetProxyConfigRequest) returns (GetProxyConfigResponse);
+
+  // 更新代理节点配置全文。
+  rpc UpdateProxyConfig (UpdateProxyConfigRequest) returns (UpdateProxyConfigResponse);
+
+  // 按邮箱查询用户绑定的设备。
+  rpc ListUserDevices (ListUserDevicesRequest) returns (ListUserDevicesResponse);
+
+  // 查询全部公告。
+  rpc ListAnnouncements (ListAnnouncementsRequest) returns (ListAnnouncementsResponse);
+
+  // 新增公告（草稿）。
+  rpc CreateAnnouncement (CreateAnnouncementRequest) returns (CreateAnnouncementResponse);
+
+  // 编辑公告标题与正文。
+  rpc UpdateAnnouncement (UpdateAnnouncementRequest) returns (UpdateAnnouncementResponse);
+
+  // 发布公告。
+  rpc PublishAnnouncement (PublishAnnouncementRequest) returns (PublishAnnouncementResponse);
+
+  // 下线公告。
+  rpc UnpublishAnnouncement (UnpublishAnnouncementRequest) returns (UnpublishAnnouncementResponse);
+
+  // 分页查询意见反馈和诊断日志。
+  rpc ListFeedback (ListFeedbackRequest) returns (ListFeedbackResponse);
+
+  // 查询一条反馈的完整内容与日志文件元信息。
+  rpc GetFeedbackDetail (GetFeedbackDetailRequest) returns (GetFeedbackDetailResponse);
+
+  // 更新反馈处理状态。
+  rpc UpdateFeedbackStatus (UpdateFeedbackStatusRequest) returns (UpdateFeedbackStatusResponse);
+
+  // 查询客户端版本发布记录。
+  rpc ListAppVersions (ListAppVersionsRequest) returns (ListAppVersionsResponse);
+
+  // 发布一个已经上传到文件服务的客户端安装包。
+  rpc PublishAppVersion (PublishAppVersionRequest) returns (PublishAppVersionResponse);
+
+  // 停用某个平台当前生效的版本。
+  rpc DisableAppVersion (DisableAppVersionRequest) returns (DisableAppVersionResponse);
+}
+
+// ---- 用户 ----
+
+message ListUsersRequest {
+  int32 page = 1;      // 页码，从 1 开始，默认 1。
+  int32 page_size = 2; // 每页数量，默认 20。
+  string keyword = 3;  // 按邮箱或 uid 模糊/精确搜索，可选。
+}
+
+message UserInfo {
+  string uid = 1;                 // 用户 ID。
+  string email = 2;               // 登录邮箱。
+  string role = 3;                // 账号角色：user / admin。
+  int32 status = 4;               // 账号状态：1正常，2禁用。
+  int64 created_at = 5 [jstype = JS_NUMBER]; // 注册时间，Unix 秒级时间戳。
+  int32 bound_device_count = 6;   // 绑定且未剔除的设备数，单位：台。
+}
+
+message ListUsersResponse {
+  repeated UserInfo users = 1;
+  int64 total = 2; // 满足条件的用户总数。
+}
+
+message GetUserSubscriptionsRequest {
+  string email = 1; // 用户登录邮箱，精确匹配。
+}
+
+message AdminSubscription {
+  string plan_id = 1;
+  string plan_name = 2;
+  string plan_type = 3;               // time / traffic。
+  int32 duration_days = 4;
+  int32 speed_limit_mbps = 5;         // 带宽限制，单位 mbps。
+  int32 max_devices = 6;              // 最大在线设备数，单位：台。
+  int64 starts_at = 7 [jstype = JS_NUMBER];
+  int64 expires_at = 8 [jstype = JS_NUMBER]; // 时间权益到期时间；流量权益为 0。
+  int32 remaining_days = 9;
+  uint64 traffic_total_bytes = 10;
+  uint64 traffic_used_bytes = 11;
+  uint64 remaining_traffic_bytes = 12;
+  int32 status = 13;                  // 数据库订阅状态。
+  bool active = 14;                   // 当前是否仍可用。
+}
+
+message GetUserSubscriptionsResponse {
+  string uid = 1;
+  string email = 2;
+  AdminSubscription time_subscription = 3;    // 没有时间订阅记录时为空。
+  AdminSubscription traffic_subscription = 4; // 没有流量订阅记录时为空。
+}
+
+// ---- 套餐 ----
+
+message ListPlansRequest {
+}
+
+message PlanInfo {
+  string plan_id = 1;         // 套餐 ID。
+  string name = 2;            // 套餐名称。
+  string plan_type = 3;       // 套餐类型：time / traffic。
+  int32 duration_days = 4;    // 有效天数，流量套餐为 0。
+  uint64 traffic_bytes = 5;   // 总流量字节数，时间套餐为 0。
+  int32 speed_limit_mbps = 6; // 带宽限制，单位 mbps；0 表示不限速。
+  int32 max_devices = 7;      // 最大在线设备数，单位：台。
+  string description = 8;     // 套餐描述。
+  uint64 price_amount = 9;    // 价格，最小货币单位。
+  string currency = 10;       // 币种。
+  bool recommended = 11;      // 是否推荐套餐。
+  int32 status = 12;          // 套餐状态：1启用，2停用。
+  int32 sort = 13;            // 排序值，越小越靠前。
+}
+
+message ListPlansResponse {
+  repeated PlanInfo plans = 1;
+}
+
+message CreatePlanRequest {
+  string plan_id = 1;
+  string name = 2;
+  string plan_type = 3;
+  int32 duration_days = 4;
+  uint64 traffic_bytes = 5;
+  int32 speed_limit_mbps = 6;
+  int32 max_devices = 7;
+  string description = 8;
+  uint64 price_amount = 9;
+  string currency = 10;
+  bool recommended = 11;
+  int32 sort = 12;
+}
+
+message CreatePlanResponse {
+  bool success = 1;
+}
+
+message UpdatePlanRequest {
+  string plan_id = 1;         // 要更新的套餐 ID。
+  string name = 2;
+  string plan_type = 3;
+  int32 duration_days = 4;
+  uint64 traffic_bytes = 5;
+  int32 speed_limit_mbps = 6;
+  int32 max_devices = 7;
+  string description = 8;
+  uint64 price_amount = 9;
+  string currency = 10;
+  bool recommended = 11;
+  int32 status = 12;          // 1启用，2停用。
+  int32 sort = 13;
+}
+
+message UpdatePlanResponse {
+  bool success = 1;
+}
+
+// ---- 用户套餐 ----
+
+message GrantUserPlanRequest {
+  string email = 1;   // 用户登录邮箱。
+  string plan_id = 2; // 要发放的套餐 ID。
+}
+
+message GrantUserPlanResponse {
+  string order_no = 1; // 生成的人工订单号。
+}
+
+message UpdateUserSubscriptionRequest {
+  string email = 1;                 // 用户登录邮箱。
+  string plan_type = 2;             // 要修改的权益类型：time / traffic。
+  int64 expires_at = 3 [jstype = JS_NUMBER];          // 时间权益新到期时间，Unix 秒级时间戳；仅 time 类型生效。
+  uint64 traffic_total_bytes = 4;   // 流量权益新总额度，单位 bytes；仅 traffic 类型生效。
+}
+
+message UpdateUserSubscriptionResponse {
+  bool success = 1;
+}
+
+message RevokeUserPlanRequest {
+  string order_no = 1; // 要撤销的权益发放订单号。
+}
+
+message RevokeUserPlanResponse {
+  bool success = 1;
+  bool already_revoked = 2; // 调用前是否已撤销，用于幂等重试。
+}
+
+// ---- 代理配置 ----
+
+message GetProxyConfigRequest {
+}
+
+message GetProxyConfigResponse {
+  string content = 1; // 完整 proxy.yaml 文本内容。
+}
+
+message UpdateProxyConfigRequest {
+  string content = 1; // 新的完整 proxy.yaml 文本内容。
+}
+
+message UpdateProxyConfigResponse {
+  bool success = 1;
+}
+
+// ---- 设备 ----
+
+message ListUserDevicesRequest {
+  string email = 1; // 按邮箱查询该用户的设备。
+}
+
+message UserDevice {
+  string uid = 1;         // 用户 ID。
+  string device_id = 2;   // 设备 ID。
+  string device_type = 3; // 设备类型。
+  int64 bound_at = 4 [jstype = JS_NUMBER];      // 首次绑定时间，Unix 秒级时间戳。
+  int64 last_login_at = 5 [jstype = JS_NUMBER]; // 最近登录或刷新时间，Unix 秒级时间戳。
+  int32 status = 6;       // 绑定状态：1已绑定，2已剔除。
+}
+
+message ListUserDevicesResponse {
+  repeated UserDevice devices = 1;
+}
+
+// ---- 公告 ----
+
+message ListAnnouncementsRequest {
+}
+
+message Announcement {
+  uint64 id = 1;          // 公告 ID。
+  string title = 2;       // 标题。
+  string content = 3;     // 正文。
+  string status = 4;      // 状态：draft / published / unpublished。
+  int64 published_at = 5 [jstype = JS_NUMBER]; // 最近发布时间，Unix 秒级时间戳。
+  int64 created_at = 6 [jstype = JS_NUMBER];   // 创建时间，Unix 秒级时间戳。
+  int64 updated_at = 7 [jstype = JS_NUMBER];   // 更新时间，Unix 秒级时间戳。
+}
+
+message ListAnnouncementsResponse {
+  repeated Announcement announcements = 1;
+}
+
+message CreateAnnouncementRequest {
+  string title = 1;   // 标题。
+  string content = 2; // 正文。
+}
+
+message CreateAnnouncementResponse {
+  uint64 id = 1; // 新建公告 ID。
+}
+
+message UpdateAnnouncementRequest {
+  uint64 id = 1;      // 公告 ID。
+  string title = 2;   // 新标题。
+  string content = 3; // 新正文。
+}
+
+message UpdateAnnouncementResponse {
+  bool success = 1;
+}
+
+message PublishAnnouncementRequest {
+  uint64 id = 1; // 公告 ID。
+}
+
+message PublishAnnouncementResponse {
+  bool success = 1;
+}
+
+message UnpublishAnnouncementRequest {
+  uint64 id = 1; // 公告 ID。
+}
+
+message UnpublishAnnouncementResponse {
+  bool success = 1;
+}
+
+// ---- 意见反馈与诊断日志 ----
+
+message ListFeedbackRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string ticket_type = 3; // feedback / diagnostic；空表示全部。
+  string status = 4;      // pending / reviewing / resolved / closed；空表示全部。
+  string uid = 5;
+  string keyword = 6;
+  int64 created_from = 7 [jstype = JS_NUMBER];
+  int64 created_to = 8 [jstype = JS_NUMBER];
+}
+
+message AdminFeedbackTicket {
+  string feedback_id = 1;
+  string uid = 2;
+  string ticket_type = 3;
+  string category = 4;
+  string content = 5;
+  string contact = 6;
+  string description = 7;
+  string status = 8;
+  string device_id = 9;
+  string device_type = 10;
+  string app_version = 11;
+  string os_version = 12;
+  string client_ip = 13;
+  int64 log_started_at = 14 [jstype = JS_NUMBER];
+  int64 log_ended_at = 15 [jstype = JS_NUMBER];
+  string file_id = 16;
+  string file_name = 17;
+  uint64 size_bytes = 18;
+  string sha256 = 19;
+  string content_type = 20;
+  int64 created_at = 21 [jstype = JS_NUMBER];
+  int64 updated_at = 22 [jstype = JS_NUMBER];
+}
+
+message ListFeedbackResponse {
+  repeated AdminFeedbackTicket tickets = 1;
+  int64 total = 2;
+}
+
+message GetFeedbackDetailRequest {
+  string feedback_id = 1;
+}
+
+message GetFeedbackDetailResponse {
+  AdminFeedbackTicket ticket = 1;
+}
+
+message UpdateFeedbackStatusRequest {
+  string feedback_id = 1;
+  string status = 2;
+}
+
+message UpdateFeedbackStatusResponse {
+  bool success = 1;
+}
+
+// ---- 客户端版本发布 ----
+
+message ListAppVersionsRequest {
+  string platform = 1;      // android / ios / windows / mac；空表示全部。
+  bool include_history = 2; // false 只查当前生效版本；true 包含 disabled 和 superseded 历史。
+  int32 page = 3;           // 页码，从 1 开始，默认 1。
+  int32 page_size = 4;      // 每页数量，默认 20，最大 100。
+}
+
+message AppVersionRelease {
+  string release_id = 1;
+  string platform = 2;
+  string latest_version = 3;
+  uint64 build_number = 4;
+  string minimum_version = 5;
+  string file_id = 6;
+  string file_name = 7;
+  uint64 package_size_bytes = 8;
+  string package_sha256 = 9;
+  string package_type = 10; // apk / ipa / exe / dmg / pkg。
+  string update_url = 11;
+  string update_title = 12;
+  string update_description = 13;
+  string status = 14; // active / disabled / superseded。
+  string operator_uid = 15;
+  int64 published_at = 16 [jstype = JS_NUMBER];
+  int64 created_at = 17 [jstype = JS_NUMBER];
+  int64 updated_at = 18 [jstype = JS_NUMBER];
+}
+
+message ListAppVersionsResponse {
+  repeated AppVersionRelease releases = 1;
+  int64 total = 2;
+}
+
+message PublishAppVersionRequest {
+  string file_id = 1;           // 文件服务上传接口返回的文件 ID。
+  string platform = 2;          // android / ios / windows / mac。
+  string latest_version = 3;    // major.minor.patch。
+  uint64 build_number = 4;      // 同一平台严格递增的构建号。
+  string minimum_version = 5;   // 低于该版本时强制升级。
+  string update_title = 6;
+  string update_description = 7;
+  string client_request_id = 8; // 调用方生成的 UUID，用于幂等发布。
+  string expected_release_id = 9; // 当前发布 ID；首次发布留空，用于防止并发覆盖。
+  string file_name = 10;          // 文件上传接口返回的原始文件名。
+  uint64 package_size_bytes = 11; // 文件上传接口返回的安装包大小，单位 bytes。
+  string package_sha256 = 12;     // 文件上传接口返回的64位小写十六进制 SHA-256。
+  string package_type = 13;       // apk / ipa / exe / dmg / pkg，必须与 platform 匹配。
+}
+
+message PublishAppVersionResponse {
+  AppVersionRelease release = 1;
+}
+
+message DisableAppVersionRequest {
+  string platform = 1;
+  string expected_release_id = 2; // 必须与当前生效发布一致。
+}
+
+message DisableAppVersionResponse {
+  bool success = 1;
+}

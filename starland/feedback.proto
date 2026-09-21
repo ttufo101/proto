@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+// Feedback 接收用户意见与已经上传完成的诊断日志元信息。
+service Feedback {
+  // 提交文字意见或使用问题。
+  rpc SubmitFeedback (SubmitFeedbackRequest) returns (SubmitFeedbackResponse);
+
+  // 绑定文件上传服务返回的 file_id，并提交诊断日志元信息。
+  rpc SubmitDiagnosticLog (SubmitDiagnosticLogRequest) returns (SubmitDiagnosticLogResponse);
+
+  // 以下接口供 Admin 服务内部调用，不通过 Gateway 直接开放。
+  rpc AdminListFeedback (FeedbackAdminListRequest) returns (FeedbackAdminListResponse);
+  rpc AdminGetFeedbackDetail (FeedbackAdminGetDetailRequest) returns (FeedbackAdminGetDetailResponse);
+  rpc AdminUpdateFeedbackStatus (FeedbackAdminUpdateStatusRequest) returns (FeedbackAdminUpdateStatusResponse);
+}
+
+message SubmitFeedbackRequest {
+  string category = 1;          // suggestion / issue / other。
+  string content = 2;           // 纯文本反馈内容。
+  string contact = 3;           // 可选联系方式。
+  string client_request_id = 4; // UUID v4，元信息提交幂等键。
+}
+
+message SubmitFeedbackResponse {
+  string feedback_id = 1;
+  int64 created_at = 2 [jstype = JS_NUMBER];
+}
+
+message SubmitDiagnosticLogRequest {
+  string file_id = 1;           // 文件上传服务返回的 UUID v4。
+  string file_name = 2;         // 文件上传服务返回的原始文件名。
+  uint64 size_bytes = 3;        // 文件上传服务返回的实际大小。
+  string sha256 = 4;            // 文件上传服务返回的 SHA-256。
+  int64 log_started_at = 5 [jstype = JS_NUMBER];
+  int64 log_ended_at = 6 [jstype = JS_NUMBER];
+  string description = 7;       // 可选问题说明。
+  string client_request_id = 8; // UUID v4，元信息提交幂等键。
+}
+
+message SubmitDiagnosticLogResponse {
+  string diagnostic_id = 1;
+  int64 created_at = 2 [jstype = JS_NUMBER];
+}
+
+message FeedbackAdminListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string ticket_type = 3; // feedback / diagnostic；空表示全部。
+  string status = 4;      // pending / reviewing / resolved / closed；空表示全部。
+  string uid = 5;
+  string keyword = 6;
+  int64 created_from = 7 [jstype = JS_NUMBER];
+  int64 created_to = 8 [jstype = JS_NUMBER];
+}
+
+message FeedbackTicket {
+  string feedback_id = 1;
+  string uid = 2;
+  string ticket_type = 3;
+  string category = 4;
+  string content = 5;
+  string contact = 6;
+  string description = 7;
+  string status = 8;
+  string device_id = 9;
+  string device_type = 10;
+  string app_version = 11;
+  string os_version = 12;
+  string client_ip = 13;
+  int64 log_started_at = 14 [jstype = JS_NUMBER];
+  int64 log_ended_at = 15 [jstype = JS_NUMBER];
+  string file_id = 16;
+  string file_name = 17;
+  uint64 size_bytes = 18;
+  string sha256 = 19;
+  string content_type = 20;
+  int64 created_at = 21 [jstype = JS_NUMBER];
+  int64 updated_at = 22 [jstype = JS_NUMBER];
+}
+
+message FeedbackAdminListResponse {
+  repeated FeedbackTicket tickets = 1;
+  int64 total = 2;
+}
+
+message FeedbackAdminGetDetailRequest {
+  string feedback_id = 1;
+}
+
+message FeedbackAdminGetDetailResponse {
+  FeedbackTicket ticket = 1;
+}
+
+message FeedbackAdminUpdateStatusRequest {
+  string feedback_id = 1;
+  string status = 2;
+}
+
+message FeedbackAdminUpdateStatusResponse {
+  bool success = 1;
+}

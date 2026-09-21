@@ -5,14 +5,26 @@ package starland;
 option go_package = "github.com/ttufo101/api/starland;starland";
 
 service Starcore {
+  // 按客户端平台和当前版本检查是否需要升级；公开接口，不依赖登录态。
+  rpc CheckUpdate (CheckUpdateRequest) returns (CheckUpdateResponse);
+
   // 查询套餐列表。
   rpc GetPlans (GetPlansRequest) returns (GetPlansResponse);
 
   // 获取当前登录用户信息。
   rpc GetUserInfo (GetUserInfoRequest) returns (GetUserInfoResponse);
 
+  // 获取当前用户尚未剔除的绑定设备。
+  rpc GetDevices (GetDevicesRequest) returns (GetDevicesResponse);
+
+  // 剔除当前用户的指定绑定设备。
+  rpc RemoveDevice (RemoveDeviceRequest) returns (RemoveDeviceResponse);
+
   // 获取代理节点配置。
   rpc GetLinks (GetLinksRequest) returns (GetLinksResponse);
+
+  // 当前登录用户使用原密码修改登录密码。
+  rpc ChangePassword (ChangePasswordRequest) returns (ChangePasswordResponse);
 
   // 上报当前登录用户的流量使用量。
   rpc ReportTraffic (ReportTrafficRequest) returns (ReportTrafficResponse);
@@ -23,8 +35,28 @@ service Starcore {
   // 供 order 服务幂等发放套餐权益。
   rpc GrantSubscription (GrantSubscriptionRequest) returns (GrantSubscriptionResponse);
 
-  // 供 order 管理工具按订单号幂等撤销套餐权益。
+  // 供 admin 服务按权益发放订单号幂等撤销套餐权益。
   rpc RevokeSubscription (RevokeSubscriptionRequest) returns (RevokeSubscriptionResponse);
+}
+
+message CheckUpdateRequest {
+  string platform = 1;        // 客户端平台：android、ios、windows 或 mac。
+  string current_version = 2; // 当前客户端版本，格式固定为 major.minor.patch。
+}
+
+message CheckUpdateResponse {
+  bool update_available = 1;   // 当前版本低于 latest_version 时为 true。
+  bool force_update = 2;       // 当前版本低于 minimum_version 时为 true。
+  string latest_version = 3;   // 当前平台的最新版本。
+  string minimum_version = 4;  // 当前平台允许继续使用的最低版本。
+  string update_url = 5;       // latest_version 对应的 HTTPS 升级地址。
+  string update_title = 6;     // latest_version 对应的升级提示标题。
+  string update_description = 7; // latest_version 对应的纯文本升级内容，允许换行。
+  uint64 package_size_bytes = 8; // 安装包大小，单位：bytes。
+  string package_sha256 = 9;     // 安装包 SHA-256，小写十六进制。
+  string package_type = 10;      // 包类型：apk、ipa、exe、dmg 或 pkg。
+  string release_id = 11;        // 本次发布的稳定唯一标识。
+  uint64 build_number = 12;      // 当前平台严格递增的构建号。
 }
 
 message GetPlansRequest {
@@ -47,6 +79,31 @@ message GetUserInfoResponse {
   Subscription traffic_subscription = 7;
   string active_entitlement_type = 8;
   bool unlimited = 9;
+  int32 bound_device_count = 10;       // 曾经绑定且尚未被剔除的设备数量，单位：台。
+}
+
+message GetDevicesRequest {
+}
+
+message BoundDevice {
+  string device_id = 1;       // 客户端提供的稳定设备 ID。
+  string device_type = 2;     // 客户端设备类型。
+  int64 bound_at = 3;         // 首次绑定时间，Unix 秒级时间戳。
+  int64 last_login_at = 4;    // 最近登录或刷新时间，Unix 秒级时间戳。
+  bool is_current = 5;        // 是否为发起本次请求的设备。
+}
+
+message GetDevicesResponse {
+  repeated BoundDevice devices = 1;
+}
+
+message RemoveDeviceRequest {
+  string device_id = 1; // 要剔除的设备 ID。
+}
+
+message RemoveDeviceResponse {
+  bool success = 1;
+  bool already_removed = 2; // 调用前设备已剔除或不存在，用于幂等重试。
 }
 
 message GetLinksRequest {
@@ -54,6 +111,16 @@ message GetLinksRequest {
 
 message GetLinksResponse {
   string content = 1; // conf/proxy.yaml 原始文件内容的 base64 编码，客户端需先解码再使用。
+  bool has_subscription = 2; // 当前用户是否拥有未过期或未耗尽的有效套餐权益。
+}
+
+message ChangePasswordRequest {
+  string old_password = 1; // 当前登录密码。
+  string new_password = 2; // 新登录密码，至少 8 字节且不超过 72 字节。
+}
+
+message ChangePasswordResponse {
+  bool success = 1; // 密码是否修改成功。
 }
 
 message ReportTrafficRequest {
@@ -75,11 +142,12 @@ message Plan {
   string plan_type = 3;         // 套餐类型：time 表示时间维度，traffic 表示流量维度。
   int32 duration_days = 4;      // 套餐有效天数，流量维度套餐为 0。
   uint64 traffic_bytes = 5;     // 套餐总流量字节数，时间维度套餐为 0。
-  int32 speed_limit_mbps = 6;   // 限速 Mbps，0 表示不限速。
-  int32 max_devices = 7;        // 最大同时在线设备数。
+  int32 speed_limit_mbps = 6;   // 带宽限制，单位：mbps；0 表示不限速。
+  int32 max_devices = 7;        // 最大同时在线设备数，单位：台。
   string description = 8;       // 套餐描述。
   uint64 price_amount = 9;      // 价格，最小货币单位。
   string currency = 10;         // 币种。
+  bool recommended = 11;        // 是否为推荐套餐。
 }
 
 message Subscription {

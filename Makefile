@@ -22,14 +22,15 @@ compile:
 	}
 
 	@echo "Compiling all protobuf files..."
-	@rm -rf "$(SRC_DIR)" && mkdir -p "$(SRC_DIR)"
+	@mkdir -p "$(SRC_DIR)"
+	@find "$(SRC_DIR)" -mindepth 1 -maxdepth 1 ! -name go.mod ! -name go.sum -exec rm -rf {} +
 
 	@if ! xrpc proto client -p "$(THIRD_PARTY_DIR)" -o "$(SRC_DIR)" .; then \
 		echo "Error: Failed to compile protobuf files."; \
 		exit 1; \
 	fi
 
-	@cd $(SRC_DIR) && go mod init github.com/ttufo101/api && go mod tidy
+	@cd $(SRC_DIR) && { test -f go.mod || go mod init github.com/ttufo101/api; } && go mod tidy
 	@echo "All projects have been compiled successfully."
 
 
