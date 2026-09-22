@@ -171,21 +171,11 @@ token.UserId == file.owner_uid
 
 文件不存在和无权访问建议都返回 404，减少文件枚举信息泄露。
 
-### Feedback 检查文件
+### Feedback 保存日志元信息
 
-Feedback 调用 `HEAD /api/v1/log-files/{file_id}` 是服务间请求。Gateway 不会把请求体中的 `com.jwt_token` 转发给 Feedback，Feedback 也不应保存用户原始 token，因此 HEAD 不能依赖用户 access token。
+`SubmitDiagnosticLog` 不调用文件服务，也不执行 `HEAD` 校验。它只校验字段格式，然后保存客户端上报的 `file_id`、文件名、大小和 SHA-256。这些字段属于**未验证元数据**：Feedback 不确认文件是否存在、是否上传完成、是否属于当前用户，也不确认实际大小和散列值是否一致。
 
-应为 Feedback 配置独立服务凭据，并要求 `files:read-metadata` 权限。HEAD 在鉴权成功后返回：
-
-```http
-Content-Length: 5242880
-Content-Type: application/zip
-X-File-SHA256: 62b8...
-X-Original-Filename: logs-20260919.zip
-X-Owner-Uid: 用户ID
-```
-
-Feedback 使用 `X-Owner-Uid` 与 Gateway 传入的可信 `xmd-uid` 比较，从而阻止跨用户绑定 `file_id`。
+Gateway 传入的可信 `xmd-uid` 只表示提交工单的用户，不能证明该用户是 `file_id` 的所有者。文件上传接口仍须独立验签、从 token 取得 `owner_uid`，并返回由服务端计算的文件元信息；受控客户端把上传结果提交给 Feedback。日志下载时继续由文件服务按 `owner_uid` 鉴权。
 
 ### 安装包上传与发布
 
@@ -207,8 +197,8 @@ SHA-256、平台和包类型提交给 Admin；Admin 不再回查文件服务。�
 - refresh token 和 password_reset token 均被拒绝。
 - `UserId` 缺失或只有空白字符被拒绝。
 - 客户端伪造 uid 不影响最终 owner。
-- 普通用户不能下载或绑定其他用户的日志文件。
-- Feedback 服务凭据不能调用普通用户上传接口。
+- 普通用户不能下载其他用户的日志文件。
+- `SubmitDiagnosticLog` 接受格式正确的客户端元信息，并明确不把这些值视为文件服务校验结果。
 - token 不出现在日志、指标标签和错误响应中。
 
 ## 7. 建议同步加固

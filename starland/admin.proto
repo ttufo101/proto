@@ -323,6 +323,7 @@ message ListFeedbackRequest {
 }
 
 message AdminFeedbackTicket {
+  reserved 20;
   string feedback_id = 1;
   string uid = 2;
   string ticket_type = 3;
@@ -342,7 +343,6 @@ message AdminFeedbackTicket {
   string file_name = 17;
   uint64 size_bytes = 18;
   string sha256 = 19;
-  string content_type = 20;
   int64 created_at = 21 [jstype = JS_NUMBER];
   int64 updated_at = 22 [jstype = JS_NUMBER];
 }

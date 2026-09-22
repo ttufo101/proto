@@ -124,22 +124,13 @@ app-releases/{platform}/{file_id}
 当前阶段要求有效 access token。版本号、构建号和发布说明由 Admin 服务保存，文件服务
 只返回 `file_id` 和技术元信息。只有 Admin 服务中指定的发布账号能把已上传文件发布为生效版本。
 
-## 5. 文件检查与下载
+## 5. 文件下载
 
 ```http
-HEAD /api/v1/log-files/{file_id}
 GET  /api/v1/log-files/{file_id}
 
 GET  /api/v1/app-releases/{file_id}
 ```
-
-`HEAD` 不返回响应体，并返回以下响应头：
-
-- `Content-Length`、`Content-Type`、`ETag`、`Last-Modified`
-- `X-File-Kind`：`log` 或 `app-release`
-- `X-File-SHA256`：文件 SHA-256
-- `X-Original-Filename`：上传时的原始文件名
-- `X-Owner-Uid`：上传者 UID
 
 `GET` 支持完整下载和单段 Range：
 
@@ -152,10 +143,10 @@ Range: bytes=0-1048575
 - 文件不存在：`404 Not Found`
 - Range 不合法：`416 Range Not Satisfiable`
 
-日志的 `HEAD` 和 `GET` 要求有效 access token，并且只能访问本人上传的文件。安装包的
-`GET` 是公开接口，便于未登录或 token 已过期的客户端完成升级。Admin 发布时直接接收
-管理员前端提交的上传结果元信息，不再回查文件服务。MinIO Bucket 始终保持私有，文件
-只能经过文件服务下载。
+日志的 `GET` 要求有效 access token，并且只能访问本人上传的文件。安装包的 `GET` 是公开
+接口，便于未登录或 token 已过期的客户端完成升级。Feedback 和 Admin 都直接接收前端提交
+的上传结果元信息，不回查文件服务；其中 Feedback 将日志元信息按客户端未验证数据保存。
+MinIO Bucket 始终保持私有，文件只能经过文件服务下载。
 
 ## 6. 通用错误
 

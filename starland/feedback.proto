@@ -4,12 +4,12 @@ package starland;
 
 option go_package = "github.com/ttufo101/api/starland;starland";
 
-// Feedback 接收用户意见与已经上传完成的诊断日志元信息。
+// Feedback 接收用户意见与客户端上报的诊断日志元信息。
 service Feedback {
   // 提交文字意见或使用问题。
   rpc SubmitFeedback (SubmitFeedbackRequest) returns (SubmitFeedbackResponse);
 
-  // 绑定文件上传服务返回的 file_id，并提交诊断日志元信息。
+  // 保存客户端上报的 file_id 和未验证的诊断日志元信息。
   rpc SubmitDiagnosticLog (SubmitDiagnosticLogRequest) returns (SubmitDiagnosticLogResponse);
 
   // 以下接口供 Admin 服务内部调用，不通过 Gateway 直接开放。
@@ -31,10 +31,10 @@ message SubmitFeedbackResponse {
 }
 
 message SubmitDiagnosticLogRequest {
-  string file_id = 1;           // 文件上传服务返回的 UUID v4。
-  string file_name = 2;         // 文件上传服务返回的原始文件名。
-  uint64 size_bytes = 3;        // 文件上传服务返回的实际大小。
-  string sha256 = 4;            // 文件上传服务返回的 SHA-256。
+  string file_id = 1;           // 客户端上报的 UUID v4；Feedback 不检查文件是否存在或归属。
+  string file_name = 2;         // 客户端上报的未验证文件名。
+  uint64 size_bytes = 3;        // 客户端上报的未验证大小，单位 bytes。
+  string sha256 = 4;            // 客户端上报的未验证 SHA-256。
   int64 log_started_at = 5 [jstype = JS_NUMBER];
   int64 log_ended_at = 6 [jstype = JS_NUMBER];
   string description = 7;       // 可选问题说明。
@@ -58,6 +58,7 @@ message FeedbackAdminListRequest {
 }
 
 message FeedbackTicket {
+  reserved 20;
   string feedback_id = 1;
   string uid = 2;
   string ticket_type = 3;
@@ -77,7 +78,6 @@ message FeedbackTicket {
   string file_name = 17;
   uint64 size_bytes = 18;
   string sha256 = 19;
-  string content_type = 20;
   int64 created_at = 21 [jstype = JS_NUMBER];
   int64 updated_at = 22 [jstype = JS_NUMBER];
 }
