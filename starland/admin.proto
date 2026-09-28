@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package starland;
 
+import "starland/starcore.proto";
+
 option go_package = "github.com/ttufo101/api/starland;starland";
 
 // Admin 是后端管理服务，仅管理员账号可调用。
@@ -36,6 +38,12 @@ service Admin {
 
   // 更新代理节点配置全文。
   rpc UpdateProxyConfig (UpdateProxyConfigRequest) returns (UpdateProxyConfigResponse);
+
+  // 查询网络覆盖展示配置。
+  rpc GetNetworkCoverageConfig (GetNetworkCoverageConfigRequest) returns (GetNetworkCoverageConfigResponse);
+
+  // 整体更新网络覆盖展示配置。
+  rpc UpdateNetworkCoverageConfig (UpdateNetworkCoverageConfigRequest) returns (UpdateNetworkCoverageConfigResponse);
 
   // 按邮箱查询用户绑定的设备。
   rpc ListUserDevices (ListUserDevicesRequest) returns (ListUserDevicesResponse);
@@ -225,15 +233,35 @@ message GetProxyConfigRequest {
 }
 
 message GetProxyConfigResponse {
-  string content = 1; // 完整 proxy.yaml 文本内容。
+  string content = 1; // 完整代理配置 YAML 文本。
 }
 
 message UpdateProxyConfigRequest {
-  string content = 1; // 新的完整 proxy.yaml 文本内容。
+  string content = 1; // 新的完整代理配置 YAML 文本。
 }
 
 message UpdateProxyConfigResponse {
   bool success = 1;
+}
+
+message GetNetworkCoverageConfigRequest {
+}
+
+message GetNetworkCoverageConfigResponse {
+  repeated NetworkCoverageRegion regions = 1; // 顺序即展示顺序。
+  uint64 revision = 2;
+  int64 updated_at = 3 [jstype = JS_NUMBER];
+}
+
+message UpdateNetworkCoverageConfigRequest {
+  repeated NetworkCoverageRegion regions = 1; // 整体替换，顺序即展示顺序。
+  uint64 expected_revision = 2;                // 必须等于当前修订号。
+}
+
+message UpdateNetworkCoverageConfigResponse {
+  bool success = 1;
+  uint64 revision = 2;
+  int64 updated_at = 3 [jstype = JS_NUMBER];
 }
 
 // ---- 设备 ----

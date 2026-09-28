@@ -11,6 +11,9 @@ service Starcore {
   // 查询套餐列表。
   rpc GetPlans (GetPlansRequest) returns (GetPlansResponse);
 
+  // 查询所有套餐共享的公开网络覆盖概览；不返回实际节点配置。
+  rpc GetNetworkCoverage (GetNetworkCoverageRequest) returns (GetNetworkCoverageResponse);
+
   // 获取当前登录用户信息。
   rpc GetUserInfo (GetUserInfoRequest) returns (GetUserInfoResponse);
 
@@ -49,7 +52,7 @@ message CheckUpdateResponse {
   bool force_update = 2;       // 当前版本低于 minimum_version 时为 true。
   string latest_version = 3;   // 当前平台的最新版本。
   string minimum_version = 4;  // 当前平台允许继续使用的最低版本。
-  string update_url = 5;       // latest_version 对应的 HTTPS 升级地址。
+  string update_url = 5;       // latest_version 对应的 HTTP/HTTPS 升级地址。
   string update_title = 6;     // latest_version 对应的升级提示标题。
   string update_description = 7; // latest_version 对应的纯文本升级内容，允许换行。
   uint64 package_size_bytes = 8; // 安装包大小，单位：bytes。
@@ -64,6 +67,26 @@ message GetPlansRequest {
 
 message GetPlansResponse {
   repeated Plan plans = 1; // 套餐列表。
+}
+
+message GetNetworkCoverageRequest {
+}
+
+message NetworkCoverageLocation {
+  string code = 1;         // 稳定位置编码，例如 jp、sg、us。
+  string display_name = 2; // 客户端展示名称，例如日本、新加坡、美国。
+}
+
+message NetworkCoverageRegion {
+  string code = 1;         // 稳定地区编码，例如 asia、north_america。
+  string display_name = 2; // 客户端展示名称，例如亚洲、北美。
+  repeated NetworkCoverageLocation locations = 3; // 顺序即展示顺序。
+}
+
+message GetNetworkCoverageResponse {
+  repeated NetworkCoverageRegion regions = 1; // 顺序即展示顺序。
+  uint64 revision = 2;                         // 配置修订号。
+  int64 updated_at = 3 [jstype = JS_NUMBER];  // 最近更新时间，Unix 秒级时间戳。
 }
 
 message GetUserInfoRequest {
@@ -110,7 +133,7 @@ message GetLinksRequest {
 }
 
 message GetLinksResponse {
-  string content = 1; // conf/proxy.yaml 原始文件内容的 base64 编码，客户端需先解码再使用。
+  string content = 1; // 数据库中当前代理配置内容的 base64 编码，客户端需先解码再使用。
   bool has_subscription = 2; // 当前用户是否拥有未过期或未耗尽的有效套餐权益。
 }
 
