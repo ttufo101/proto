@@ -38,6 +38,9 @@ service Starcore {
   // 供 order 服务幂等发放套餐权益。
   rpc GrantSubscription (GrantSubscriptionRequest) returns (GrantSubscriptionResponse);
 
+  // 供 entitlement-worker 为新注册用户幂等发放试用权益；不经 Gateway 暴露。
+  rpc GrantRegistrationTrial (GrantRegistrationTrialRequest) returns (GrantRegistrationTrialResponse);
+
   // 供 admin 服务按权益发放订单号幂等撤销套餐权益。
   rpc RevokeSubscription (RevokeSubscriptionRequest) returns (RevokeSubscriptionResponse);
 }
@@ -192,6 +195,15 @@ message GrantSubscriptionRequest {
   Plan plan = 3;
 }
 message GrantSubscriptionResponse { bool success = 1; }
+
+message GrantRegistrationTrialRequest {
+  string uid = 1;      // 新注册用户 ID。
+  string grant_id = 2; // 试用权益幂等键，固定为 registration_trial:<uid>。
+}
+
+message GrantRegistrationTrialResponse {
+  bool success = 1;
+}
 
 message RevokeSubscriptionRequest {
   string order_no = 1; // 要撤销的权益发放订单号。
