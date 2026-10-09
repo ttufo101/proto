@@ -17,6 +17,9 @@ service Starcore {
   // 获取当前登录用户信息。
   rpc GetUserInfo (GetUserInfoRequest) returns (GetUserInfoResponse);
 
+  // 当前登录用户领取注册试用；领取成功后开始计算三天有效期。
+  rpc ActivateRegistrationTrial (ActivateRegistrationTrialRequest) returns (ActivateRegistrationTrialResponse);
+
   // 获取当前用户尚未剔除的绑定设备。
   rpc GetDevices (GetDevicesRequest) returns (GetDevicesResponse);
 
@@ -38,8 +41,8 @@ service Starcore {
   // 供 order 服务幂等发放套餐权益。
   rpc GrantSubscription (GrantSubscriptionRequest) returns (GrantSubscriptionResponse);
 
-  // 供 entitlement-worker 为新注册用户幂等发放试用权益；不经 Gateway 暴露。
-  rpc GrantRegistrationTrial (GrantRegistrationTrialRequest) returns (GrantRegistrationTrialResponse);
+  // 供 entitlement-worker 为新注册用户幂等发放待领取试用资格；不经 Gateway 暴露。
+  rpc IssueRegistrationTrial (IssueRegistrationTrialRequest) returns (IssueRegistrationTrialResponse);
 
   // 供 admin 服务按权益发放订单号幂等撤销套餐权益。
   rpc RevokeSubscription (RevokeSubscriptionRequest) returns (RevokeSubscriptionResponse);
@@ -106,6 +109,28 @@ message GetUserInfoResponse {
   string active_entitlement_type = 8;
   bool unlimited = 9;
   int32 bound_device_count = 10;       // 曾经绑定且尚未被剔除的设备数量，单位：台。
+  RegistrationTrial registration_trial = 11; // 注册试用资格及激活状态。
+}
+
+enum RegistrationTrialStatus {
+  REGISTRATION_TRIAL_STATUS_NONE = 0;
+  REGISTRATION_TRIAL_STATUS_AVAILABLE = 1;
+  REGISTRATION_TRIAL_STATUS_ACTIVE = 2;
+  REGISTRATION_TRIAL_STATUS_EXPIRED = 3;
+}
+
+message RegistrationTrial {
+  RegistrationTrialStatus status = 1;
+  int64 activated_at = 2; // 领取时间，Unix 秒级时间戳；未领取时为 0。
+  int64 expires_at = 3;   // 领取后的到期时间，Unix 秒级时间戳；未领取时为 0。
+  int32 duration_days = 4;
+}
+
+message ActivateRegistrationTrialRequest {
+}
+
+message ActivateRegistrationTrialResponse {
+  RegistrationTrial registration_trial = 1;
 }
 
 message GetDevicesRequest {
@@ -196,12 +221,12 @@ message GrantSubscriptionRequest {
 }
 message GrantSubscriptionResponse { bool success = 1; }
 
-message GrantRegistrationTrialRequest {
+message IssueRegistrationTrialRequest {
   string uid = 1;      // 新注册用户 ID。
-  string grant_id = 2; // 试用权益幂等键，固定为 registration_trial:<uid>。
+  string grant_id = 2; // 试用资格幂等键，固定为 registration_trial:<uid>。
 }
 
-message GrantRegistrationTrialResponse {
+message IssueRegistrationTrialResponse {
   bool success = 1;
 }
 
