@@ -11,14 +11,11 @@ service Starcore {
   // 查询套餐列表。
   rpc GetPlans (GetPlansRequest) returns (GetPlansResponse);
 
-  // 查询所有套餐共享的公开网络覆盖概览；不返回实际节点配置。
-  rpc GetNetworkCoverage (GetNetworkCoverageRequest) returns (GetNetworkCoverageResponse);
+  // 查询所有套餐共享的连接性能和公开覆盖权益；不返回实际节点配置。
+  rpc GetSharedPlanBenefits (GetSharedPlanBenefitsRequest) returns (GetSharedPlanBenefitsResponse);
 
   // 获取当前登录用户信息。
   rpc GetUserInfo (GetUserInfoRequest) returns (GetUserInfoResponse);
-
-  // 当前登录用户领取注册试用；领取成功后开始计算三天有效期。
-  rpc ActivateRegistrationTrial (ActivateRegistrationTrialRequest) returns (ActivateRegistrationTrialResponse);
 
   // 获取当前用户尚未剔除的绑定设备。
   rpc GetDevices (GetDevicesRequest) returns (GetDevicesResponse);
@@ -41,8 +38,8 @@ service Starcore {
   // 供 order 服务幂等发放套餐权益。
   rpc GrantSubscription (GrantSubscriptionRequest) returns (GrantSubscriptionResponse);
 
-  // 供 entitlement-worker 为新注册用户幂等发放待领取试用资格；不经 Gateway 暴露。
-  rpc IssueRegistrationTrial (IssueRegistrationTrialRequest) returns (IssueRegistrationTrialResponse);
+  // 供 entitlement-worker 为新注册用户幂等发放新人专享套餐资格；不经 Gateway 暴露。
+  rpc IssueNewUserOffer (IssueNewUserOfferRequest) returns (IssueNewUserOfferResponse);
 
   // 供 admin 服务按权益发放订单号幂等撤销套餐权益。
   rpc RevokeSubscription (RevokeSubscriptionRequest) returns (RevokeSubscriptionResponse);
@@ -75,24 +72,27 @@ message GetPlansResponse {
   repeated Plan plans = 1; // 套餐列表。
 }
 
-message GetNetworkCoverageRequest {
+message GetSharedPlanBenefitsRequest {
 }
 
-message NetworkCoverageLocation {
+message SharedPlanBenefitLocation {
   string code = 1;         // 稳定位置编码，例如 jp、sg、us。
   string display_name = 2; // 客户端展示名称，例如日本、新加坡、美国。
+  int32 connection_point_count = 3; // 该位置对外展示的连接地点数量，由管理员维护。
 }
 
-message NetworkCoverageRegion {
+message SharedPlanBenefitRegion {
   string code = 1;         // 稳定地区编码，例如 asia、north_america。
   string display_name = 2; // 客户端展示名称，例如亚洲、北美。
-  repeated NetworkCoverageLocation locations = 3; // 顺序即展示顺序。
+  repeated SharedPlanBenefitLocation locations = 3; // 顺序即展示顺序。
 }
 
-message GetNetworkCoverageResponse {
-  repeated NetworkCoverageRegion regions = 1; // 顺序即展示顺序。
-  uint64 revision = 2;                         // 配置修订号。
-  int64 updated_at = 3 [jstype = JS_NUMBER];  // 最近更新时间，Unix 秒级时间戳。
+message GetSharedPlanBenefitsResponse {
+  int32 speed_limit_mbps = 1;                  // 当前统一展示的最高连接速度，单位 Mbps。
+  int32 max_devices = 2;                       // 当前统一展示的支持设备数，单位：台。
+  repeated SharedPlanBenefitRegion regions = 3; // 顺序即展示顺序。
+  uint64 revision = 4;                         // 配置修订号。
+  int64 updated_at = 5 [jstype = JS_NUMBER];  // 最近更新时间，Unix 秒级时间戳。
 }
 
 message GetUserInfoRequest {
@@ -109,28 +109,20 @@ message GetUserInfoResponse {
   string active_entitlement_type = 8;
   bool unlimited = 9;
   int32 bound_device_count = 10;       // 曾经绑定且尚未被剔除的设备数量，单位：台。
-  RegistrationTrial registration_trial = 11; // 注册试用资格及激活状态。
+  NewUserOffer new_user_offer = 11;     // 当前用户的新人专享套餐资格。
 }
 
-enum RegistrationTrialStatus {
-  REGISTRATION_TRIAL_STATUS_NONE = 0;
-  REGISTRATION_TRIAL_STATUS_AVAILABLE = 1;
-  REGISTRATION_TRIAL_STATUS_ACTIVE = 2;
-  REGISTRATION_TRIAL_STATUS_EXPIRED = 3;
+enum NewUserOfferStatus {
+  NEW_USER_OFFER_STATUS_NONE = 0;
+  NEW_USER_OFFER_STATUS_AVAILABLE = 1;
+  NEW_USER_OFFER_STATUS_RESERVED = 2;
+  NEW_USER_OFFER_STATUS_PURCHASED = 3;
 }
 
-message RegistrationTrial {
-  RegistrationTrialStatus status = 1;
-  int64 activated_at = 2; // 领取时间，Unix 秒级时间戳；未领取时为 0。
-  int64 expires_at = 3;   // 领取后的到期时间，Unix 秒级时间戳；未领取时为 0。
-  int32 duration_days = 4;
-}
-
-message ActivateRegistrationTrialRequest {
-}
-
-message ActivateRegistrationTrialResponse {
-  RegistrationTrial registration_trial = 1;
+message NewUserOffer {
+  NewUserOfferStatus status = 1;
+  string plan_id = 2;
+  string order_no = 3; // 预占或最终购买成功的订单号；没有时为空。
 }
 
 message GetDevicesRequest {
@@ -199,6 +191,8 @@ message Plan {
   uint64 price_amount = 9;      // 价格，最小货币单位。
   string currency = 10;         // 币种。
   bool recommended = 11;        // 是否为推荐套餐。
+  bool new_user_only = 12;      // 是否仅允许具备新人资格且从未购买过的用户购买。
+  string badge = 13;            // 套餐角标，例如“新人专享”。
 }
 
 message Subscription {
@@ -211,7 +205,10 @@ message Subscription {
   uint64 remaining_traffic_bytes = 7;
 }
 
-message GetPlanForPurchaseRequest { string plan_id = 1; }
+message GetPlanForPurchaseRequest {
+  string plan_id = 1;
+  string uid = 2; // 购买用户 ID；新人专享套餐必须提供并通过资格校验。
+}
 message GetPlanForPurchaseResponse { Plan plan = 1; }
 
 message GrantSubscriptionRequest {
@@ -221,12 +218,12 @@ message GrantSubscriptionRequest {
 }
 message GrantSubscriptionResponse { bool success = 1; }
 
-message IssueRegistrationTrialRequest {
+message IssueNewUserOfferRequest {
   string uid = 1;      // 新注册用户 ID。
-  string grant_id = 2; // 试用资格幂等键，固定为 registration_trial:<uid>。
+  string offer_id = 2; // 新人资格幂等键，固定为 new_user_offer:<uid>。
 }
 
-message IssueRegistrationTrialResponse {
+message IssueNewUserOfferResponse {
   bool success = 1;
 }
 

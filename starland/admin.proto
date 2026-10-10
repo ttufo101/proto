@@ -39,11 +39,11 @@ service Admin {
   // 更新代理节点配置全文。
   rpc UpdateProxyConfig (UpdateProxyConfigRequest) returns (UpdateProxyConfigResponse);
 
-  // 查询网络覆盖展示配置。
-  rpc GetNetworkCoverageConfig (GetNetworkCoverageConfigRequest) returns (GetNetworkCoverageConfigResponse);
+  // 查询所有套餐共享的连接性能和覆盖权益配置。
+  rpc GetSharedPlanBenefitsConfig (GetSharedPlanBenefitsConfigRequest) returns (GetSharedPlanBenefitsConfigResponse);
 
-  // 整体更新网络覆盖展示配置。
-  rpc UpdateNetworkCoverageConfig (UpdateNetworkCoverageConfigRequest) returns (UpdateNetworkCoverageConfigResponse);
+  // 整体更新所有套餐共享的连接性能和覆盖权益配置。
+  rpc UpdateSharedPlanBenefitsConfig (UpdateSharedPlanBenefitsConfigRequest) returns (UpdateSharedPlanBenefitsConfigResponse);
 
   // 按邮箱查询用户绑定的设备。
   rpc ListUserDevices (ListUserDevicesRequest) returns (ListUserDevicesResponse);
@@ -151,6 +151,8 @@ message PlanInfo {
   bool recommended = 11;      // 是否推荐套餐。
   int32 status = 12;          // 套餐状态：1启用，2停用。
   int32 sort = 13;            // 排序值，越小越靠前。
+  bool new_user_only = 14;    // 是否为新人专享套餐。
+  string badge = 15;          // 套餐角标。
 }
 
 message ListPlansResponse {
@@ -170,6 +172,8 @@ message CreatePlanRequest {
   string currency = 10;
   bool recommended = 11;
   int32 sort = 12;
+  bool new_user_only = 13;
+  string badge = 14;
 }
 
 message CreatePlanResponse {
@@ -190,6 +194,8 @@ message UpdatePlanRequest {
   bool recommended = 11;
   int32 status = 12;          // 1启用，2停用。
   int32 sort = 13;
+  bool new_user_only = 14;
+  string badge = 15;
 }
 
 message UpdatePlanResponse {
@@ -244,21 +250,25 @@ message UpdateProxyConfigResponse {
   bool success = 1;
 }
 
-message GetNetworkCoverageConfigRequest {
+message GetSharedPlanBenefitsConfigRequest {
 }
 
-message GetNetworkCoverageConfigResponse {
-  repeated NetworkCoverageRegion regions = 1; // 顺序即展示顺序。
-  uint64 revision = 2;
-  int64 updated_at = 3 [jstype = JS_NUMBER];
+message GetSharedPlanBenefitsConfigResponse {
+  int32 speed_limit_mbps = 1;
+  int32 max_devices = 2;
+  repeated SharedPlanBenefitRegion regions = 3; // 顺序即展示顺序。
+  uint64 revision = 4;
+  int64 updated_at = 5 [jstype = JS_NUMBER];
 }
 
-message UpdateNetworkCoverageConfigRequest {
-  repeated NetworkCoverageRegion regions = 1; // 整体替换，顺序即展示顺序。
-  uint64 expected_revision = 2;                // 必须等于当前修订号。
+message UpdateSharedPlanBenefitsConfigRequest {
+  int32 speed_limit_mbps = 1;
+  int32 max_devices = 2;
+  repeated SharedPlanBenefitRegion regions = 3; // 整体替换，顺序即展示顺序。
+  uint64 expected_revision = 4;                 // 必须等于当前修订号。
 }
 
-message UpdateNetworkCoverageConfigResponse {
+message UpdateSharedPlanBenefitsConfigResponse {
   bool success = 1;
   uint64 revision = 2;
   int64 updated_at = 3 [jstype = JS_NUMBER];
