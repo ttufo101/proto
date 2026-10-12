@@ -8,14 +8,14 @@ service Starcore {
   // 按客户端平台和当前版本检查是否需要升级；公开接口，不依赖登录态。
   rpc CheckUpdate (CheckUpdateRequest) returns (CheckUpdateResponse);
 
-  // 查询套餐列表。
+  // 查询当前登录用户可展示和可购买的套餐列表。
   rpc GetPlans (GetPlansRequest) returns (GetPlansResponse);
 
   // 查询所有套餐共享的连接性能和公开覆盖权益；不返回实际节点配置。
   rpc GetSharedPlanBenefits (GetSharedPlanBenefitsRequest) returns (GetSharedPlanBenefitsResponse);
 
-  // 获取当前登录用户信息。
-  rpc GetUserInfo (GetUserInfoRequest) returns (GetUserInfoResponse);
+  // 获取当前登录用户的账户和已购权益概览。
+  rpc GetAccountOverview (GetAccountOverviewRequest) returns (GetAccountOverviewResponse);
 
   // 获取当前用户尚未剔除的绑定设备。
   rpc GetDevices (GetDevicesRequest) returns (GetDevicesResponse);
@@ -95,34 +95,23 @@ message GetSharedPlanBenefitsResponse {
   int64 updated_at = 5 [jstype = JS_NUMBER];  // 最近更新时间，Unix 秒级时间戳。
 }
 
-message GetUserInfoRequest {
+message GetAccountOverviewRequest {
 }
 
-message GetUserInfoResponse {
-  string username = 1;                  // 用户名，当前使用登录邮箱。
-  Plan current_plan = 2;                // 当前订购套餐，未订购时为空。
-  int32 remaining_days = 3;             // 时间维度套餐剩余天数，由服务端按订阅结束时间计算。
-  uint64 remaining_traffic_bytes = 4;   // 流量维度套餐剩余流量字节数。
-  string link_url = 5;                  // 固定 link 地址。
-  Subscription time_subscription = 6;
-  Subscription traffic_subscription = 7;
-  string active_entitlement_type = 8;
-  bool unlimited = 9;
-  int32 bound_device_count = 10;       // 曾经绑定且尚未被剔除的设备数量，单位：台。
-  NewUserOffer new_user_offer = 11;     // 当前用户的新人专享套餐资格。
+enum ActiveEntitlementType {
+  ACTIVE_ENTITLEMENT_TYPE_UNSPECIFIED = 0;
+  ACTIVE_ENTITLEMENT_TYPE_NONE = 1;
+  ACTIVE_ENTITLEMENT_TYPE_TIME = 2;
+  ACTIVE_ENTITLEMENT_TYPE_TRAFFIC = 3;
 }
 
-enum NewUserOfferStatus {
-  NEW_USER_OFFER_STATUS_NONE = 0;
-  NEW_USER_OFFER_STATUS_AVAILABLE = 1;
-  NEW_USER_OFFER_STATUS_RESERVED = 2;
-  NEW_USER_OFFER_STATUS_PURCHASED = 3;
-}
-
-message NewUserOffer {
-  NewUserOfferStatus status = 1;
-  string plan_id = 2;
-  string order_no = 3; // 预占或最终购买成功的订单号；没有时为空。
+message GetAccountOverviewResponse {
+  string email = 1;                              // 当前登录邮箱。
+  Subscription time_subscription = 2;           // 当前有效时间权益；没有时为空。
+  Subscription traffic_subscription = 3;        // 当前有效流量权益；没有时为空。
+  int32 bound_device_count = 4;                  // 曾经绑定且尚未被剔除的设备数量，单位：台。
+  bool has_active_entitlement = 5;               // 是否至少有一种当前可用权益。
+  ActiveEntitlementType active_entitlement_type = 6; // 实际连接优先使用的权益类型；时间权益优先。
 }
 
 message GetDevicesRequest {
