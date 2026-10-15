@@ -39,6 +39,18 @@ service Admin {
   // 更新代理节点配置全文。
   rpc UpdateProxyConfig (UpdateProxyConfigRequest) returns (UpdateProxyConfigResponse);
 
+  // 查询数据面中转节点。
+  rpc ListDataPlaneNodes (ListDataPlaneNodesRequest) returns (ListDataPlaneNodesResponse);
+
+  // 创建数据面中转节点，节点密码只在本次响应中返回。
+  rpc CreateDataPlaneNode (CreateDataPlaneNodeRequest) returns (CreateDataPlaneNodeResponse);
+
+  // 更新数据面中转节点展示名称和启用状态。
+  rpc UpdateDataPlaneNode (UpdateDataPlaneNodeRequest) returns (UpdateDataPlaneNodeResponse);
+
+  // 轮换数据面中转节点密码，新密码只在本次响应中返回。
+  rpc RotateDataPlaneNodePassword (RotateDataPlaneNodePasswordRequest) returns (RotateDataPlaneNodePasswordResponse);
+
   // 查询所有套餐共享的连接性能和覆盖权益配置。
   rpc GetSharedPlanBenefitsConfig (GetSharedPlanBenefitsConfigRequest) returns (GetSharedPlanBenefitsConfigResponse);
 
@@ -165,8 +177,7 @@ message CreatePlanRequest {
   string plan_type = 3;
   int32 duration_days = 4;
   uint64 traffic_bytes = 5;
-  int32 speed_limit_mbps = 6;
-  int32 max_devices = 7;
+  reserved 6, 7;
   string description = 8;
   uint64 price_amount = 9;
   string currency = 10;
@@ -186,8 +197,7 @@ message UpdatePlanRequest {
   string plan_type = 3;
   int32 duration_days = 4;
   uint64 traffic_bytes = 5;
-  int32 speed_limit_mbps = 6;
-  int32 max_devices = 7;
+  reserved 6, 7;
   string description = 8;
   uint64 price_amount = 9;
   string currency = 10;
@@ -248,6 +258,51 @@ message UpdateProxyConfigRequest {
 
 message UpdateProxyConfigResponse {
   bool success = 1;
+}
+
+message ListDataPlaneNodesRequest {
+}
+
+message DataPlaneNode {
+  string node_id = 1;
+  string display_name = 2;
+  bool enabled = 3;
+  int64 last_seen_at = 4 [jstype = JS_NUMBER];
+  int64 created_at = 5 [jstype = JS_NUMBER];
+  int64 updated_at = 6 [jstype = JS_NUMBER];
+}
+
+message ListDataPlaneNodesResponse {
+  repeated DataPlaneNode nodes = 1;
+}
+
+message CreateDataPlaneNodeRequest {
+  string node_id = 1;
+  string display_name = 2;
+}
+
+message CreateDataPlaneNodeResponse {
+  bool success = 1;
+  string node_password = 2; // 只返回一次，服务端不保存明文。
+}
+
+message UpdateDataPlaneNodeRequest {
+  string node_id = 1;
+  string display_name = 2;
+  bool enabled = 3;
+}
+
+message UpdateDataPlaneNodeResponse {
+  bool success = 1;
+}
+
+message RotateDataPlaneNodePasswordRequest {
+  string node_id = 1;
+}
+
+message RotateDataPlaneNodePasswordResponse {
+  bool success = 1;
+  string node_password = 2; // 只返回一次，服务端不保存明文。
 }
 
 message GetSharedPlanBenefitsConfigRequest {

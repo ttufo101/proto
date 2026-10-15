@@ -29,9 +29,6 @@ service Starcore {
   // 当前登录用户使用原密码修改登录密码。
   rpc ChangePassword (ChangePasswordRequest) returns (ChangePasswordResponse);
 
-  // 上报当前登录用户的流量使用量。
-  rpc ReportTraffic (ReportTrafficRequest) returns (ReportTrafficResponse);
-
   // 供 order 服务查询可购买套餐。
   rpc GetPlanForPurchase (GetPlanForPurchaseRequest) returns (GetPlanForPurchaseResponse);
 
@@ -153,19 +150,6 @@ message ChangePasswordRequest {
 
 message ChangePasswordResponse {
   bool success = 1; // 密码是否修改成功。
-}
-
-message ReportTrafficRequest {
-  string report_id = 1;       // 上报唯一 ID，同一用户下用于幂等防重放。
-  uint64 uplink_bytes = 2;    // 上行流量字节数。
-  uint64 downlink_bytes = 3;  // 下行流量字节数。
-}
-
-message ReportTrafficResponse {
-  uint64 traffic_used_bytes = 1;       // 更新后的已用流量字节数。
-  uint64 remaining_traffic_bytes = 2;  // 更新后的剩余流量字节数。
-  string entitlement_type = 3;
-  bool unlimited = 4;
 }
 
 message Plan {

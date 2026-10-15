@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package starland;
+
+option go_package = "github.com/ttufo101/api/starland;starland";
+
+// DataPlane 提供中转 Mihomo 经 Gateway 调用的节点鉴权和流量计量接口。
+service Dataplane {
+  rpc AuthorizeUser (AuthorizeUserRequest) returns (AuthorizeUserResponse);
+  rpc ReportUsage (ReportUsageRequest) returns (ReportUsageResponse);
+}
+
+message AuthorizeUserRequest {
+  string password_sha256 = 1; // AnyTLS 握手携带的 password SHA-256，小写十六进制。
+}
+
+message AuthorizeUserResponse {
+  bool allowed = 1;
+  string deny_reason = 2; // credential_invalid、credential_revoked、account_disabled、no_entitlement 或 traffic_exhausted。
+  string entitlement_type = 3; // time、traffic 或空字符串。
+  int64 authorized_until = 4; // 时间权益到期 Unix 秒；流量权益为 0。
+  uint64 remaining_traffic_bytes = 5;
+}
+
+message UserUsageItem {
+  string password_sha256 = 1;      // 用户固定 password 的 SHA-256。
+  uint64 uplink_total_bytes = 2;   // 当前 Mihomo 启动期内该用户累计上行字节数。
+  uint64 downlink_total_bytes = 3; // 当前 Mihomo 启动期内该用户累计下行字节数。
+}
+
+message ReportUsageRequest {
+  string boot_id = 1;              // 当前 Mihomo 进程启动 ID。
+  uint64 sequence = 2;             // 当前节点启动期严格递增的批次序号。
+  reserved 3;
+  repeated UserUsageItem items = 4; // 单批最多 200 个用户。
+}
+
+message UserUsageDecision {
+  string password_sha256 = 1;
+  bool accepted = 2;               // 本条累计游标是否已被 DataPlane 接受。
+  bool allowed = 3;                // 用户是否还能继续连接。
+  uint64 accounted_bytes = 4;      // 本次新确认的上下行总字节数。
+  uint64 remaining_traffic_bytes = 5;
+  string deny_reason = 6;
+}
+
+message ReportUsageResponse {
+  repeated UserUsageDecision decisions = 1;
+}

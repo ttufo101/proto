@@ -50,6 +50,8 @@ message Com {
     string os_ver = 4;     // 操作系统版本
     string jwt_token = 5;  // JWT Token
     string uid = 6;        // 游客标识；公开接口可使用，不能替代登录 Token 中的用户身份。
+    string node_id = 7;    // 数据面节点 ID；仅 node_api 接口使用。
+    string node_password = 8; // 数据面节点调用密码；仅 node_api 接口使用。
 }
 
 message Req {
