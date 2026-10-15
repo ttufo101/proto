@@ -109,6 +109,7 @@ message GetAccountOverviewResponse {
   int32 bound_device_count = 4;                  // 曾经绑定且尚未被剔除的设备数量，单位：台。
   bool has_active_entitlement = 5;               // 是否至少有一种当前可用权益。
   ActiveEntitlementType active_entitlement_type = 6; // 实际连接优先使用的权益类型；时间权益优先。
+  bool traffic_exhausted = 7;                    // 最近的流量套餐是否已经用尽；为 true 时 traffic_subscription 仍返回且剩余流量为 0。
 }
 
 message GetDevicesRequest {
