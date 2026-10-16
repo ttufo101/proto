@@ -104,8 +104,8 @@ enum ActiveEntitlementType {
 
 message GetAccountOverviewResponse {
   string email = 1;                              // 当前登录邮箱。
-  Subscription time_subscription = 2;           // 当前有效时间权益；没有时为空。
-  Subscription traffic_subscription = 3;        // 当前有效流量权益；没有时为空。
+  Subscription time_subscription = 2;           // 最近的时间套餐快照；从未购买时为空，是否过期由 time_expired 判断。
+  Subscription traffic_subscription = 3;        // 最近的流量套餐快照；从未购买时为空，是否耗尽由 traffic_exhausted 判断。
   int32 bound_device_count = 4;                  // 曾经绑定且尚未被剔除的设备数量，单位：台。
   bool has_active_entitlement = 5;               // 是否至少有一种当前可用权益。
   ActiveEntitlementType active_entitlement_type = 6; // 实际连接优先使用的权益类型；时间权益优先。
