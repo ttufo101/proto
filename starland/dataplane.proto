@@ -20,6 +20,7 @@ message AuthorizeUserResponse {
   string entitlement_type = 3; // time、traffic 或空字符串。
   int64 authorized_until = 4; // 时间权益到期 Unix 秒；流量权益为 0。
   uint64 remaining_traffic_bytes = 5;
+  uint32 download_limit_mbps = 6; // 当前节点上该用户全部连接共享的下载带宽上限，单位 Mbps。
 }
 
 message UserUsageItem {

@@ -14,7 +14,7 @@ service Order {
   // 分页查询当前登录用户的订单列表。
   rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse);
 
-  // 为待支付订单创建指定支付渠道的支付参数。
+  // 异步创建支付报价；重复调用读取同一结果，ready 时展示收银台。
   rpc CreatePayment (CreatePaymentRequest) returns (CreatePaymentResponse);
 
   // 接收支付渠道服务端通知；无需登录 Token，但必须通过渠道签名校验。
@@ -41,31 +41,30 @@ message ListOrdersRequest {
 // 创建支付请求。
 message CreatePaymentRequest {
   string order_no = 1;         // 当前用户的待支付订单号。
-  string payment_channel = 2;  // 支付渠道标识，例如具体支付适配器名称。
+  string payment_channel = 2;  // 支付渠道标识，目前仅 epusdt_polygon。
 }
 
 // 创建支付响应。
 message CreatePaymentResponse {
   string order_no = 1;         // 对应的订单号。
   string payment_payload = 2;  // 支付渠道生成的客户端支付参数或支付链接。
-  int64 expire_at = 3;         // 订单支付截止时间，Unix 秒级时间戳。
+  int64 expire_at = 3;         // epusdt 报价截止时间，Unix 秒级时间戳。
+  string status = 4;           // queued/creating/ready/creation_unknown/paid/manual_review。
+  string actual_amount = 5;    // 固定 USDT 实付数量，十进制字符串，禁止客户端重新报价。
+  string receive_address = 6;
+  string network = 7;          // polygon
+  string token = 8;            // USDT
+
 }
 
-// 支付渠道回调请求。
+// epusdt 原始 JSON 通知；通过 Gateway 专用 HTTP 入口转发，Order 验签并持久化。
 message PaymentCallbackRequest {
-  string payment_channel = 1;   // 支付渠道标识，必须与创建支付时一致。
-  string event_id = 2;          // 支付渠道事件唯一 ID，用于回调幂等。
-  string order_no = 3;          // Starland 订单号。
-  string payment_trade_no = 4;  // 支付渠道交易流水号。
-  uint64 amount = 5;            // 实付金额，使用币种最小单位，必须与订单金额一致。
-  string currency = 6;          // 支付币种，必须与订单币种一致。
-  int64 paid_at = 7;            // 支付成功时间，Unix 秒级时间戳。
-  string signature = 8;         // 支付渠道签名；当前通用实现为 HMAC-SHA256 小写十六进制。
+  string payload = 1;
 }
 
 // 支付回调处理结果。
 message PaymentCallbackResponse {
-  bool success = 1;  // 回调是否完成幂等处理并成功发放权益。
+  bool success = 1;  // 通知是否已验签并持久化；不代表权益已发放。
 }
 
 // 订单详情。
