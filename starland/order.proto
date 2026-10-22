@@ -15,7 +15,10 @@ service Order {
   rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse);
 
   // 同步创建并保存支付报价；正常直接返回 ready，重复调用读取同一报价。
-  rpc CreatePayment (CreatePaymentRequest) returns (CreatePaymentResponse);
+  rpc CreatePayment (CreatePaymentRequest) returns (PaymentQuote);
+
+  // 只读查询当前用户订单的报价；不创建报价、不预占资格、不延长截止时间。
+  rpc GetPayment (GetPaymentRequest) returns (PaymentQuote);
 
   // 接收支付渠道服务端通知；无需登录 Token，但必须通过渠道签名校验。
   rpc PaymentCallback (PaymentCallbackRequest) returns (PaymentCallbackResponse);
@@ -44,12 +47,17 @@ message CreatePaymentRequest {
   string payment_channel = 2;  // 支付渠道标识，目前仅 epusdt_polygon。
 }
 
-// 创建支付响应。
-message CreatePaymentResponse {
+message GetPaymentRequest {
+  string order_no = 1; // 当前用户的订单号。
+}
+
+// 创建和查询共用的支付报价。订单状态优先，非待支付订单不得继续付款。
+message PaymentQuote {
   string order_no = 1;         // 对应的订单号。
   string payment_payload = 2;  // 完整收银台 HTTP(S) URL；仅 ready 且报价未过期时返回，其他状态为空。
   int64 expire_at = 3;         // 当前报价截止时间，Unix 秒；尚无报价时为 0。付款入口只使用本字段，不用 OrderResponse.expire_at 替代。
-  // ready/expired/creation_unknown/paid/manual_review；queued 已移除，creating 仅为内部并发控制状态。
+  // not_created/creating/ready/expired/creation_unknown/paid/manual_review。
+  // not_created 和 creating 可由 GetPayment 返回；CreatePayment 正常同步返回 ready。
   // ready 报价在服务端当前时间 >= expire_at 时返回 expired，payment_payload 为空；
   // 重复调用只读取原报价，不重新创建或延期。已 paid 或 manual_review 不因时间变为 expired。
   string status = 4;
@@ -80,11 +88,12 @@ message OrderResponse {
   uint64 price_amount = 6;  // 订单金额，使用币种最小单位。
   string currency = 7;      // 订单币种，例如 CNY。
   string status = 8;        // 订单状态：pending、paying、paid、success、closed、fulfill_failed、refund_pending、refunded 或 revoked（仅人工订单）。
-  int64 expire_at = 9;      // 订单截止时间，Unix 秒；创建订单时生成，保存渠道报价后同步为报价截止时间。客户端付款入口以 CreatePaymentResponse.expire_at 为准。
+  int64 expire_at = 9;      // 订单截止时间，Unix 秒；创建订单时生成，保存渠道报价后同步为报价截止时间。客户端付款入口以 PaymentQuote.expire_at 为准。
   int64 paid_at = 10;       // 支付成功时间，未支付时为 0；Unix 秒级时间戳。
+  int64 created_at = 11;    // 下单时间，Unix 秒。
 }
 
 // 订单列表响应。
 message ListOrdersResponse {
-  repeated OrderResponse orders = 1;  // 当前页订单，按创建时间倒序排列。
+  repeated OrderResponse orders = 1;  // 当前页订单，按 created_at、数据库主键倒序排列。
 }
