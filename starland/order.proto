@@ -5,6 +5,9 @@ package starland;
 option go_package = "github.com/ttufo101/api/starland;starland";
 
 service Order {
+  // 查询指定套餐当前可展示的支付方式；coming_soon 仅用于占位展示。
+  rpc ListPaymentMethods (ListPaymentMethodsRequest) returns (ListPaymentMethodsResponse);
+
   // 为当前登录用户创建待支付套餐订单；相同幂等键返回同一订单。
   rpc CreateOrder (CreateOrderRequest) returns (OrderResponse);
 
@@ -27,7 +30,41 @@ service Order {
 // 创建订单请求。
 message CreateOrderRequest {
   string plan_id = 1;          // 要购买的套餐稳定业务 ID；价格与权益由服务端查询。
-  string idempotency_key = 2;  // 客户端生成的幂等键；同一用户下最长 64 个字符。
+  string payment_method_id = 2;// 创建订单时锁定的支付方式；订单关闭前不可更换。
+  string idempotency_key = 3;  // 客户端生成的幂等键；同一用户下最长 64 个字符。
+}
+
+message ListPaymentMethodsRequest {
+  string plan_id = 1;
+}
+
+enum PaymentMethodStatus {
+  PAYMENT_METHOD_STATUS_UNSPECIFIED = 0;
+  PAYMENT_METHOD_STATUS_AVAILABLE = 1;
+  PAYMENT_METHOD_STATUS_COMING_SOON = 2;
+  PAYMENT_METHOD_STATUS_UNAVAILABLE = 3;
+}
+
+enum PaymentActionType {
+  PAYMENT_ACTION_TYPE_UNSPECIFIED = 0;
+  PAYMENT_ACTION_TYPE_CRYPTO_TRANSFER = 1;
+  PAYMENT_ACTION_TYPE_REDIRECT = 2;
+}
+
+message PaymentMethod {
+  string method_id = 1;
+  string display_name = 2;
+  PaymentMethodStatus status = 3;
+  PaymentActionType action_type = 4;
+  string network = 5;
+  string token = 6;
+  string icon_key = 7;
+  string description = 8;
+  int32 sort_order = 9;
+}
+
+message ListPaymentMethodsResponse {
+  repeated PaymentMethod methods = 1;
 }
 
 // 查询单个订单请求。
@@ -43,8 +80,7 @@ message ListOrdersRequest {
 
 // 创建支付请求。
 message CreatePaymentRequest {
-  string order_no = 1;         // 当前用户的待支付订单号。
-  string payment_channel = 2;  // 支付渠道标识，目前仅 epusdt_polygon。
+  string order_no = 1; // 当前用户的待支付订单号；支付方式读取订单快照。
 }
 
 message GetPaymentRequest {
@@ -52,19 +88,40 @@ message GetPaymentRequest {
 }
 
 // 创建和查询共用的支付报价。订单状态优先，非待支付订单不得继续付款。
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_NOT_CREATED = 1;
+  PAYMENT_STATUS_CREATING = 2;
+  PAYMENT_STATUS_READY = 3;
+  PAYMENT_STATUS_PROCESSING = 4;
+  PAYMENT_STATUS_PAID = 5;
+  PAYMENT_STATUS_EXPIRED = 6;
+  PAYMENT_STATUS_CREATION_UNKNOWN = 7;
+  PAYMENT_STATUS_MANUAL_REVIEW = 8;
+  PAYMENT_STATUS_FAILED = 9;
+}
+
+message CryptoTransferAction {
+  string amount = 1;          // 固定 USDT 实付数量，十进制字符串。
+  string token = 2;           // 当前为 USDT。
+  string network = 3;         // polygon、solana 或 tron。
+  string receive_address = 4;
+  string qr_payload = 5;      // 服务端确定的二维码原文；第一阶段等于收款地址。
+}
+
+message RedirectAction {
+  string checkout_url = 1;
+}
+
 message PaymentQuote {
-  string order_no = 1;         // 对应的订单号。
-  string payment_payload = 2;  // 完整收银台 HTTP(S) URL；仅 ready 且报价未过期时返回，其他状态为空。
-  int64 expire_at = 3;         // 当前报价截止时间，Unix 秒；尚无报价时为 0。付款入口只使用本字段，不用 OrderResponse.expire_at 替代。
-  // not_created/creating/ready/expired/creation_unknown/paid/manual_review。
-  // not_created 和 creating 可由 GetPayment 返回；CreatePayment 正常同步返回 ready。
-  // ready 报价在服务端当前时间 >= expire_at 时返回 expired，payment_payload 为空；
-  // 重复调用只读取原报价，不重新创建或延期。已 paid 或 manual_review 不因时间变为 expired。
-  string status = 4;
-  string actual_amount = 5;    // 固定 USDT 实付数量，十进制字符串，禁止客户端重新报价。
-  string receive_address = 6;
-  string network = 7;          // polygon
-  string token = 8;            // USDT
+  string order_no = 1;
+  string payment_method_id = 2;
+  PaymentStatus status = 3;
+  int64 expire_at = 4;
+  oneof action {
+    CryptoTransferAction crypto_transfer = 10;
+    RedirectAction redirect = 11;
+  }
 
 }
 
@@ -91,6 +148,9 @@ message OrderResponse {
   int64 expire_at = 9;      // 订单截止时间，Unix 秒；创建订单时生成，保存渠道报价后同步为报价截止时间。客户端付款入口以 PaymentQuote.expire_at 为准。
   int64 paid_at = 10;       // 支付成功时间，未支付时为 0；Unix 秒级时间戳。
   int64 created_at = 11;    // 下单时间，Unix 秒。
+  string payment_method_id = 12;   // 创建订单时锁定的稳定支付方式 ID。
+  string payment_method_name = 13; // 创建订单时保存的展示名称快照。
+  PaymentActionType payment_action_type = 14;
 }
 
 // 订单列表响应。
