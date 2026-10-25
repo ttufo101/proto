@@ -8,20 +8,14 @@ service Order {
   // 查询指定套餐当前可展示的支付方式；coming_soon 仅用于占位展示。
   rpc ListPaymentMethods (ListPaymentMethodsRequest) returns (ListPaymentMethodsResponse);
 
-  // 为当前登录用户创建待支付套餐订单；相同幂等键返回同一订单。
-  rpc CreateOrder (CreateOrderRequest) returns (OrderResponse);
+  // 创建订单及不可变支付信息；相同幂等键返回同一订单，新人套餐恢复唯一未完成订单。
+  rpc CreateOrder (CreateOrderRequest) returns (OrderDetailResponse);
 
   // 查询当前登录用户的指定订单。
-  rpc GetOrder (GetOrderRequest) returns (OrderResponse);
+  rpc GetOrder (GetOrderRequest) returns (OrderDetailResponse);
 
   // 分页查询当前登录用户的订单列表。
   rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse);
-
-  // 同步创建并保存支付报价；正常直接返回 ready，重复调用读取同一报价。
-  rpc CreatePayment (CreatePaymentRequest) returns (PaymentQuote);
-
-  // 只读查询当前用户订单的报价；不创建报价、不预占资格、不延长截止时间。
-  rpc GetPayment (GetPaymentRequest) returns (PaymentQuote);
 
   // 接收支付渠道服务端通知；无需登录 Token，但必须通过渠道签名校验。
   rpc PaymentCallback (PaymentCallbackRequest) returns (PaymentCallbackResponse);
@@ -78,27 +72,16 @@ message ListOrdersRequest {
   int32 page_size = 2;  // 每页数量，范围 1 至 100；非法值使用服务端默认值。
 }
 
-// 创建支付请求。
-message CreatePaymentRequest {
-  string order_no = 1; // 当前用户的待支付订单号；支付方式读取订单快照。
-}
-
-message GetPaymentRequest {
-  string order_no = 1; // 当前用户的订单号。
-}
-
-// 创建和查询共用的支付报价。订单状态优先，非待支付订单不得继续付款。
+// 订单支付信息状态。每个订单在创建时即拥有唯一支付会话。
 enum PaymentStatus {
   PAYMENT_STATUS_UNSPECIFIED = 0;
-  PAYMENT_STATUS_NOT_CREATED = 1;
-  PAYMENT_STATUS_CREATING = 2;
-  PAYMENT_STATUS_READY = 3;
-  PAYMENT_STATUS_PROCESSING = 4;
-  PAYMENT_STATUS_PAID = 5;
-  PAYMENT_STATUS_EXPIRED = 6;
-  PAYMENT_STATUS_CREATION_UNKNOWN = 7;
-  PAYMENT_STATUS_MANUAL_REVIEW = 8;
-  PAYMENT_STATUS_FAILED = 9;
+  PAYMENT_STATUS_CREATING = 1;
+  PAYMENT_STATUS_READY = 2;
+  PAYMENT_STATUS_PAID = 4;
+  PAYMENT_STATUS_EXPIRED = 5;
+  PAYMENT_STATUS_CREATION_UNKNOWN = 6;
+  PAYMENT_STATUS_MANUAL_REVIEW = 7;
+  PAYMENT_STATUS_FAILED = 8;
 }
 
 message CryptoTransferAction {
@@ -113,11 +96,11 @@ message RedirectAction {
   string checkout_url = 1;
 }
 
-message PaymentQuote {
-  string order_no = 1;
-  string payment_method_id = 2;
-  PaymentStatus status = 3;
-  int64 expire_at = 4;
+message PaymentInfo {
+  string payment_method_id = 1;
+  PaymentStatus status = 2;
+  PaymentActionType action_type = 3;
+  int64 payment_deadline_at = 4; // 付款操作截止时间，Unix 秒；支付信息本身不会重新生成。
   oneof action {
     CryptoTransferAction crypto_transfer = 10;
     RedirectAction redirect = 11;
@@ -144,16 +127,34 @@ message OrderResponse {
   string plan_type = 5;     // 套餐类型：time 时间套餐，traffic 流量套餐。
   uint64 price_amount = 6;  // 订单金额，使用币种最小单位。
   string currency = 7;      // 订单币种，例如 CNY。
-  string status = 8;        // 订单状态：pending、paying、paid、success、closed、fulfill_failed、refund_pending、refunded 或 revoked（仅人工订单）。
-  int64 expire_at = 9;      // 订单截止时间，Unix 秒；创建订单时生成，保存渠道报价后同步为报价截止时间。客户端付款入口以 PaymentQuote.expire_at 为准。
-  int64 paid_at = 10;       // 支付成功时间，未支付时为 0；Unix 秒级时间戳。
-  int64 created_at = 11;    // 下单时间，Unix 秒。
-  string payment_method_id = 12;   // 创建订单时锁定的稳定支付方式 ID。
-  string payment_method_name = 13; // 创建订单时保存的展示名称快照。
-  PaymentActionType payment_action_type = 14;
+  string status = 8;        // 订单状态：paying、paid、success、fulfill_failed、refund_pending、closed 或 revoked（仅人工订单）。
+  int64 paid_at = 9;        // 支付成功时间，未支付时为 0；Unix 秒级时间戳。
+  int64 created_at = 10;    // 下单时间，Unix 秒。
+  string payment_method_id = 11;   // 创建订单时锁定的稳定支付方式 ID。
+  string payment_method_name = 12; // 创建订单时保存的展示名称快照。
+  PaymentActionType payment_action_type = 13;
 }
 
-// 订单列表响应。
+// 创建订单及查询订单详情共用的聚合响应。
+message OrderDetailResponse {
+  OrderResponse order = 1;
+  PaymentInfo payment = 2;
+  bool resumed_existing_order = 3; // 仅新人套餐恢复已有未完成订单时为 true。
+}
+
+// 订单列表只返回展示摘要，不包含地址、二维码或固定 USDT 金额。
+message OrderSummary {
+  string order_no = 1;
+  string plan_name = 2;
+  string plan_type = 3;
+  uint64 price_amount = 4;
+  string currency = 5;
+  string payment_method_id = 6;
+  string payment_method_name = 7;
+  string status = 8;
+  int64 created_at = 9;
+}
+
 message ListOrdersResponse {
-  repeated OrderResponse orders = 1;  // 当前页订单，按 created_at、数据库主键倒序排列。
+  repeated OrderSummary orders = 1;  // 当前页订单，按 created_at、数据库主键倒序排列。
 }
