@@ -38,8 +38,11 @@ service Starcore {
   // 供 entitlement-worker 为新注册用户幂等发放新人专享套餐资格；不经 Gateway 暴露。
   rpc IssueNewUserOffer (IssueNewUserOfferRequest) returns (IssueNewUserOfferResponse);
 
-  // 供 admin 服务按权益发放订单号幂等撤销套餐权益。
+  // 供 order 服务按权益发放订单号幂等撤销套餐权益；Admin 通过 Order 编排。
   rpc RevokeSubscription (RevokeSubscriptionRequest) returns (RevokeSubscriptionResponse);
+
+  // 供 Admin 幂等调整现有订阅；不经 Gateway 对外开放。
+  rpc AdjustSubscription (AdjustSubscriptionRequest) returns (AdjustSubscriptionResponse);
 }
 
 message CheckUpdateRequest {
@@ -209,4 +212,28 @@ message RevokeSubscriptionRequest {
 message RevokeSubscriptionResponse {
   bool success = 1;          // 是否已处于撤销成功状态。
   bool already_revoked = 2;  // 调用前是否已经撤销，用于幂等重试。
+}
+
+message SubscriptionAdjustmentSnapshot {
+  int64 expires_at = 1 [jstype = JS_NUMBER];
+  uint64 traffic_total_bytes = 2;
+  uint64 traffic_used_bytes = 3;
+  int32 status = 4;
+}
+
+message AdjustSubscriptionRequest {
+  string operator_uid = 1;
+  string client_request_id = 2;
+  string operation_reason = 3;
+  string uid = 4;
+  string plan_type = 5;
+  int64 expires_at = 6 [jstype = JS_NUMBER];
+  uint64 traffic_total_bytes = 7;
+}
+
+message AdjustSubscriptionResponse {
+  bool success = 1;
+  bool resumed_existing_request = 2;
+  SubscriptionAdjustmentSnapshot before = 3;
+  SubscriptionAdjustmentSnapshot after = 4;
 }

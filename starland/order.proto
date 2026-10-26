@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package starland;
 
+import "starland/starcore.proto";
+
 option go_package = "github.com/ttufo101/api/starland;starland";
 
 service Order {
@@ -19,6 +21,21 @@ service Order {
 
   // 接收支付渠道服务端通知；无需登录 Token，但必须通过渠道签名校验。
   rpc PaymentCallback (PaymentCallbackRequest) returns (PaymentCallbackResponse);
+
+  // 供 Admin 幂等创建人工订单并发放权益；不经 Gateway 对外开放。
+  rpc CreateManualOrder (CreateManualOrderRequest) returns (CreateManualOrderResponse);
+
+  // 供 Admin 幂等撤销人工订单权益；不经 Gateway 对外开放。
+  rpc RevokeManualOrder (RevokeManualOrderRequest) returns (RevokeManualOrderResponse);
+
+  // 供 Admin 分页查询全部订单；不经 Gateway 对外开放。
+  rpc ListOrdersForAdmin (ListOrdersForAdminRequest) returns (ListOrdersForAdminResponse);
+
+  // 供 Admin 查询订单、支付会话和支付事件；不经 Gateway 对外开放。
+  rpc GetOrderForAdmin (GetOrderForAdminRequest) returns (GetOrderForAdminResponse);
+
+  // 供 Admin 对允许状态的订单幂等重试权益发放；不经 Gateway 对外开放。
+  rpc RetryOrderFulfillment (RetryOrderFulfillmentRequest) returns (RetryOrderFulfillmentResponse);
 }
 
 // 创建订单请求。
@@ -157,4 +174,100 @@ message OrderSummary {
 
 message ListOrdersResponse {
   repeated OrderSummary orders = 1;  // 当前页订单，按 created_at、数据库主键倒序排列。
+}
+
+// ---- Admin 内部订单管理 ----
+
+message CreateManualOrderRequest {
+  string operator_uid = 1;
+  string client_request_id = 2;
+  string operation_reason = 3;
+  string uid = 4;
+  Plan plan = 5;
+}
+
+message CreateManualOrderResponse {
+  string order_no = 1;
+  string status = 2;
+  bool resumed_existing_order = 3;
+}
+
+message RevokeManualOrderRequest {
+  string operator_uid = 1;
+  string client_request_id = 2;
+  string operation_reason = 3;
+  string order_no = 4;
+}
+
+message RevokeManualOrderResponse {
+  bool success = 1;
+  bool already_revoked = 2;
+}
+
+message ListOrdersForAdminRequest {
+  string uid = 1;
+  string order_no = 2;
+  string order_status = 3;
+  string payment_status = 4;
+  string payment_method_id = 5;
+  string order_source = 6;
+  int64 created_from = 7 [jstype = JS_NUMBER];
+  int64 created_to = 8 [jstype = JS_NUMBER];
+  int32 page = 9;
+  int32 page_size = 10;
+}
+
+message AdminOrderSummary {
+  OrderResponse order = 1;
+  string order_source = 2;
+  string payment_status = 3;
+  int64 updated_at = 4 [jstype = JS_NUMBER];
+}
+
+message ListOrdersForAdminResponse {
+  repeated AdminOrderSummary orders = 1;
+  int64 total = 2;
+}
+
+message GetOrderForAdminRequest { string order_no = 1; }
+
+message AdminPaymentDetail {
+  PaymentInfo payment = 1;
+  string provider = 2;
+  string provider_session_id = 3;
+  string transaction_id = 4;
+  string last_error = 5;
+  int64 close_after_at = 6 [jstype = JS_NUMBER];
+  int64 next_reconcile_at = 7 [jstype = JS_NUMBER];
+}
+
+message AdminPaymentEvent {
+  int64 id = 1 [jstype = JS_NUMBER];
+  string event_type = 2;
+  string status = 3;
+  string error_message = 4;
+  int64 created_at = 5 [jstype = JS_NUMBER];
+  int64 processed_at = 6 [jstype = JS_NUMBER];
+}
+
+message GetOrderForAdminResponse {
+  OrderResponse order = 1;
+  string order_source = 2;
+  AdminPaymentDetail payment = 3;
+  repeated AdminPaymentEvent events = 4;
+  string operator_uid = 5;
+  string operation_reason = 6;
+  int64 updated_at = 7 [jstype = JS_NUMBER];
+}
+
+message RetryOrderFulfillmentRequest {
+  string operator_uid = 1;
+  string client_request_id = 2;
+  string operation_reason = 3;
+  string order_no = 4;
+}
+
+message RetryOrderFulfillmentResponse {
+  bool success = 1;
+  string status = 2;
 }

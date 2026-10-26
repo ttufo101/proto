@@ -3,11 +3,12 @@ syntax = "proto3";
 package starland;
 
 import "starland/starcore.proto";
+import "starland/order.proto";
 
 option go_package = "github.com/ttufo101/api/starland;starland";
 
-// Admin 是后端管理服务，仅管理员账号可调用。
-// 所有接口均要求携带 access token，且账号角色为 admin；鉴权在服务内部完成。
+// Admin 是后端管理服务，仅启用状态的管理员账号可调用。
+// 所有接口均要求携带 access token，且账号角色为 admin、status=1；鉴权在服务内部完成。
 service Admin {
   // 分页查询注册用户，支持按邮箱或 uid 搜索。
   rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
@@ -92,6 +93,15 @@ service Admin {
 
   // 停用某个平台当前生效的版本。
   rpc DisableAppVersion (DisableAppVersionRequest) returns (DisableAppVersionResponse);
+
+  // 分页查询用户支付订单和人工订单。
+  rpc ListOrders (AdminListOrdersRequest) returns (AdminListOrdersResponse);
+
+  // 查询订单、支付会话和支付事件详情。
+  rpc GetOrderDetail (AdminGetOrderDetailRequest) returns (AdminGetOrderDetailResponse);
+
+  // 对允许状态的订单幂等重试权益发放。
+  rpc RetryOrderFulfillment (AdminRetryOrderFulfillmentRequest) returns (AdminRetryOrderFulfillmentResponse);
 }
 
 // ---- 用户 ----
@@ -165,6 +175,7 @@ message PlanInfo {
   int32 sort = 13;            // 排序值，越小越靠前。
   bool new_user_only = 14;    // 是否为新人专享套餐。
   string badge = 15;          // 套餐角标。
+  uint64 revision = 16;       // 乐观锁修订号。
 }
 
 message ListPlansResponse {
@@ -189,6 +200,7 @@ message CreatePlanRequest {
 
 message CreatePlanResponse {
   bool success = 1;
+  uint64 revision = 2;
 }
 
 message UpdatePlanRequest {
@@ -206,10 +218,12 @@ message UpdatePlanRequest {
   int32 sort = 13;
   bool new_user_only = 14;
   string badge = 15;
+  uint64 expected_revision = 16;
 }
 
 message UpdatePlanResponse {
   bool success = 1;
+  uint64 revision = 2;
 }
 
 // ---- 用户套餐 ----
@@ -217,6 +231,8 @@ message UpdatePlanResponse {
 message GrantUserPlanRequest {
   string email = 1;   // 用户登录邮箱。
   string plan_id = 2; // 要发放的套餐 ID。
+  string client_request_id = 3; // 管理端生成的稳定幂等键。
+  string operation_reason = 4;  // 人工发放原因。
 }
 
 message GrantUserPlanResponse {
@@ -228,6 +244,8 @@ message UpdateUserSubscriptionRequest {
   string plan_type = 2;             // 要修改的权益类型：time / traffic。
   int64 expires_at = 3 [jstype = JS_NUMBER];          // 时间权益新到期时间，Unix 秒级时间戳；仅 time 类型生效。
   uint64 traffic_total_bytes = 4;   // 流量权益新总额度，单位 bytes；仅 traffic 类型生效。
+  string client_request_id = 5;     // 管理端生成的稳定幂等键。
+  string operation_reason = 6;      // 调整原因。
 }
 
 message UpdateUserSubscriptionResponse {
@@ -236,6 +254,8 @@ message UpdateUserSubscriptionResponse {
 
 message RevokeUserPlanRequest {
   string order_no = 1; // 要撤销的权益发放订单号。
+  string client_request_id = 2;
+  string operation_reason = 3;
 }
 
 message RevokeUserPlanResponse {
@@ -250,14 +270,70 @@ message GetProxyConfigRequest {
 
 message GetProxyConfigResponse {
   string content = 1; // 完整代理配置 YAML 文本。
+  uint64 revision = 2;
 }
 
 message UpdateProxyConfigRequest {
   string content = 1; // 新的完整代理配置 YAML 文本。
+  uint64 expected_revision = 2;
+  string client_request_id = 3;
+  string operation_reason = 4;
 }
 
 message UpdateProxyConfigResponse {
   bool success = 1;
+  uint64 revision = 2;
+}
+
+// ---- 订单管理 ----
+
+message AdminListOrdersRequest {
+  string email = 1;
+  string uid = 2;
+  string order_no = 3;
+  string order_status = 4;
+  string payment_status = 5;
+  string payment_method_id = 6;
+  string order_source = 7;
+  int64 created_from = 8 [jstype = JS_NUMBER];
+  int64 created_to = 9 [jstype = JS_NUMBER];
+  int32 page = 10;
+  int32 page_size = 11;
+}
+
+message AdminOrderItem {
+  OrderResponse order = 1;
+  string order_source = 2;
+  string payment_status = 3;
+  int64 updated_at = 4 [jstype = JS_NUMBER];
+}
+
+message AdminListOrdersResponse {
+  repeated AdminOrderItem orders = 1;
+  int64 total = 2;
+}
+
+message AdminGetOrderDetailRequest { string order_no = 1; }
+
+message AdminGetOrderDetailResponse {
+  OrderResponse order = 1;
+  string order_source = 2;
+  AdminPaymentDetail payment = 3;
+  repeated AdminPaymentEvent events = 4;
+  string operator_uid = 5;
+  string operation_reason = 6;
+  int64 updated_at = 7 [jstype = JS_NUMBER];
+}
+
+message AdminRetryOrderFulfillmentRequest {
+  string order_no = 1;
+  string client_request_id = 2;
+  string operation_reason = 3;
+}
+
+message AdminRetryOrderFulfillmentResponse {
+  bool success = 1;
+  string status = 2;
 }
 
 message ListDataPlaneNodesRequest {
