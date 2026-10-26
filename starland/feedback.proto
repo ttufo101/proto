@@ -18,11 +18,25 @@ service Feedback {
   rpc AdminUpdateFeedbackStatus (FeedbackAdminUpdateStatusRequest) returns (FeedbackAdminUpdateStatusResponse);
 }
 
+// FeedbackAttachment 是文件服务校验后保存的可信附件元数据。
+message FeedbackAttachment {
+  string file_id = 1;
+  string file_name = 2;
+  string file_kind = 3;  // feedback-image。
+  string mime_type = 4;  // image/jpeg、image/png 或 image/webp。
+  uint64 size_bytes = 5;
+  string sha256 = 6;
+  uint32 width = 7;
+  uint32 height = 8;
+  uint32 sort_order = 9;
+}
+
 message SubmitFeedbackRequest {
   string category = 1;          // suggestion / issue / other。
   string content = 2;           // 纯文本反馈内容。
   string contact = 3;           // 可选联系方式。
   string client_request_id = 4; // UUID v4，元信息提交幂等键。
+  repeated string attachment_file_ids = 5; // 文件服务返回的图片 file_id，按展示顺序排列，最多 3 个。
 }
 
 message SubmitFeedbackResponse {
@@ -80,6 +94,7 @@ message FeedbackTicket {
   string sha256 = 19;
   int64 created_at = 21 [jstype = JS_NUMBER];
   int64 updated_at = 22 [jstype = JS_NUMBER];
+  repeated FeedbackAttachment attachments = 23;
 }
 
 message FeedbackAdminListResponse {

@@ -4,6 +4,7 @@ package starland;
 
 import "starland/starcore.proto";
 import "starland/order.proto";
+import "starland/feedback.proto";
 
 option go_package = "github.com/ttufo101/api/starland;starland";
 
@@ -514,6 +515,7 @@ message AdminFeedbackTicket {
   string sha256 = 19;
   int64 created_at = 21 [jstype = JS_NUMBER];
   int64 updated_at = 22 [jstype = JS_NUMBER];
+  repeated FeedbackAttachment attachments = 23;
 }
 
 message ListFeedbackResponse {

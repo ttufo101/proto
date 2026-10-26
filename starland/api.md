@@ -72,7 +72,120 @@ Location: /api/v1/log-files/3fa85f64-5717-4562-b3fc-2c963f66afa6
 
 当前要求有效 access token，文件所有者取自 token 的可信 uid。
 
-## 4. 客户端安装包上传
+## 4. 反馈图片上传
+
+```http
+POST /api/v1/feedback-files
+Authorization: Bearer <access-token>
+Content-Type: multipart/form-data
+Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+X-File-Size: 10485760
+X-File-SHA256: <必填的64位小写十六进制SHA-256>
+```
+
+表单字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `file` | binary | 是 | JPEG、PNG 或 WebP 图片 |
+
+文件所有者必须从 access token 的可信 uid 取得。服务端必须检查实际大小、SHA-256、magic
+bytes 和完整解码结果，仅接受 JPEG、PNG、WebP；单个文件最多 10 MiB（10,485,760 bytes），
+最长边最多 2048 像素，并拒绝动画图片和解码炸弹。对象以 `feedback-image` 类型保存，初始
+状态为 `pending`，未绑定文件默认 24 小时后清理。
+
+首次上传成功返回 `201 Created`：
+
+```http
+Location: /api/v1/feedback-files/3fa85f64-5717-4562-b3fc-2c963f66afa6
+```
+
+```json
+{
+  "file_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "file_kind": "feedback-image",
+  "filename": "feedback.jpg",
+  "size": 1048576,
+  "sha256": "62b8...",
+  "mime_type": "image/jpeg",
+  "width": 1280,
+  "height": 720,
+  "created_at": "2026-10-26T08:00:00Z",
+  "request_id": "req_01K5..."
+}
+```
+
+幂等作用域为 `用户 ID + feedback-image + Idempotency-Key`。
+
+## 5. 反馈图片内部接口
+
+内部接口使用独立监听地址和服务凭据，生产环境建议使用 mTLS；不得只依赖客户端传入的 uid
+或公网来源 IP。
+
+批量验证文件及所有者：
+
+```http
+POST /internal/feedback-files/verify
+Authorization: Service <service-credential>
+Content-Type: application/json
+```
+
+```json
+{
+  "uid": "user-id",
+  "file_ids": ["id-1", "id-2", "id-3"]
+}
+```
+
+```json
+{
+  "files": [
+    {
+      "file_id": "id-1",
+      "exists": true,
+      "owner_match": true,
+      "status": "pending",
+      "file_kind": "feedback-image",
+      "filename": "feedback.jpg",
+      "size_bytes": 1048576,
+      "sha256": "62b8...",
+      "mime_type": "image/jpeg",
+      "width": 1280,
+      "height": 720
+    }
+  ]
+}
+```
+
+绑定文件到反馈工单：
+
+```http
+POST /internal/feedback-files/claim
+Authorization: Service <service-credential>
+Content-Type: application/json
+```
+
+```json
+{
+  "uid": "user-id",
+  "feedback_id": "fb_...",
+  "file_ids": ["id-1", "id-2"]
+}
+```
+
+`claim` 必须幂等，将文件从 `pending` 改为 `bound`，同一个文件不能绑定到不同反馈。
+Feedback 最多绑定 3 张图片，每张最多 10 MiB，总大小最多 30 MiB（31,457,280 bytes）。
+
+Admin 获取图片可以使用：
+
+```http
+GET /internal/feedback-files/{file_id}
+Authorization: Service <admin-service-credential>
+```
+
+接口返回文件流，或返回有效期 1 到 5 分钟的预签名 URL。
+
+## 6. 客户端安装包上传
 
 ```http
 POST /api/v1/app-releases
@@ -124,12 +237,14 @@ app-releases/{platform}/{file_id}
 当前阶段要求有效 access token。版本号、构建号和发布说明由 Admin 服务保存，文件服务
 只返回 `file_id` 和技术元信息。只有 Admin 服务中指定的发布账号能把已上传文件发布为生效版本。
 
-## 5. 文件下载
+## 7. 文件下载
 
 ```http
 GET  /api/v1/log-files/{file_id}
 
 GET  /api/v1/app-releases/{file_id}
+
+GET  /api/v1/feedback-files/{file_id}
 ```
 
 `GET` 支持完整下载和单段 Range：
@@ -143,12 +258,12 @@ Range: bytes=0-1048575
 - 文件不存在：`404 Not Found`
 - Range 不合法：`416 Range Not Satisfiable`
 
-日志的 `GET` 要求有效 access token，并且只能访问本人上传的文件。安装包的 `GET` 是公开
+日志和反馈图片的 `GET` 要求有效 access token，并且只能访问本人上传的文件。安装包的 `GET` 是公开
 接口，便于未登录或 token 已过期的客户端完成升级。Feedback 和 Admin 都直接接收前端提交
 的上传结果元信息，不回查文件服务；其中 Feedback 将日志元信息按客户端未验证数据保存。
 MinIO Bucket 始终保持私有，文件只能经过文件服务下载。
 
-## 6. 通用错误
+## 8. 通用错误
 
 | HTTP 状态 | 错误码 | 场景 |
 | --- | --- | --- |
@@ -162,7 +277,7 @@ MinIO Bucket 始终保持私有，文件只能经过文件服务下载。
 | `422` | `CHECKSUM_MISMATCH` | 实际 SHA-256 不一致 |
 | `503` | `STORAGE_UNAVAILABLE` | MinIO 不可用 |
 
-## 7. 健康检查
+## 9. 健康检查
 
 ```http
 GET /health/live
