@@ -1,104 +1,59 @@
 # FileUpload API
 
+本文件与 `/root/proto/starland/api.md` 的当前协议同步；本轮明确延期的反馈附件
+`verify/claim` 在第 6 节说明。
+
 ## 1. 通用约定
 
 - API 前缀：`/api/v1`
-- 文件保存在私有 MinIO Bucket 中，调用方不直接接触 MinIO 凭据。
-- 日志和客户端安装包是两类独立资源，使用不同接口、权限和对象前缀。
-- App 为每个逻辑上传任务生成并持久化 UUID v4 `Idempotency-Key`。
-- 用户上传接口必须校验 access token，验签与权限边界详见 `token.md`。
-- 只有本地开发环境可同时设置 `APP_ENV=development` 和 `ALLOW_INSECURE_AUTH=true` 绕过鉴权。
+- 用户接口通过 `Authorization: Bearer <access_token>` 鉴权。
+- 上传使用 `multipart/form-data`，文件字段名为 `file`。
+- 每个逻辑上传任务使用 UUID v4 `Idempotency-Key`。
+- `X-File-Size` 是正整数字节数；服务校验实际大小。
+- 只有开发环境可同时配置 `APP_ENV=development` 与 `ALLOW_INSECURE_AUTH=true`。
+- 幂等作用域是 `用户 ID + 文件类型 + Idempotency-Key`，状态保存在单实例内存中，默认
+  保留 24 小时且重启丢失。
 
-错误响应：
+错误响应格式：
 
 ```json
 {
   "code": "FILE_TOO_LARGE",
   "message": "uploaded file exceeds the allowed size",
-  "request_id": "req_01K5..."
+  "request_id": "req_..."
 }
 ```
 
-## 2. 幂等约定
-
-当前幂等作用域是 `文件类型 + Idempotency-Key`，因此同一个 UUID 可分别用于日志和
-安装包上传。接入 JWT 后扩展为 `用户 ID + 文件类型 + Idempotency-Key`。
-
-- 相同作用域、相同文件参数、已经完成：返回原来的 `file_id` 和 `200 OK`。
-- 相同作用域正在处理：返回 `409 UPLOAD_IN_PROGRESS`。
-- 相同作用域对应不同文件参数：返回 `409 IDEMPOTENCY_CONFLICT`。
-- 上传失败：释放幂等键，调用方可以使用原键重新上传完整文件。
-- 内存记录默认保留24小时，不跨进程、不支持多实例。
-
-## 3. C 端日志上传
+## 2. 日志上传
 
 ```http
 POST /api/v1/log-files
+Authorization: Bearer <access-token>
 Content-Type: multipart/form-data
 Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 X-File-Size: 5242880
-X-File-SHA256: <可选>
+X-File-SHA256: <可选的64位十六进制SHA-256>
 ```
 
-表单字段：
+接受 `.zip`、`.gz`、`.tar.gz`，对象路径为 `logs/{file_id}`。文件所有者只取自 Access
+Token 的可信 `UserId`。首次成功返回 `201 Created`，等价幂等重放返回 `200 OK`。
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `file` | binary | 是 | `.zip`、`.gz` 或 `.tar.gz` |
-
-对象路径：
-
-```text
-logs/{file_id}
-```
-
-首次上传成功返回 `201 Created`：
-
-```http
-Location: /api/v1/log-files/3fa85f64-5717-4562-b3fc-2c963f66afa6
-```
-
-```json
-{
-  "file_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "file_kind": "log",
-  "filename": "logs.zip",
-  "size": 5242880,
-  "sha256": "62b8...",
-  "created_at": "2026-09-19T16:30:00Z",
-  "request_id": "req_01K5..."
-}
-```
-
-当前要求有效 access token，文件所有者取自 token 的可信 uid。
-
-## 4. 反馈图片上传
+## 3. 反馈图片上传
 
 ```http
 POST /api/v1/feedback-files
 Authorization: Bearer <access-token>
 Content-Type: multipart/form-data
 Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
-X-File-Size: 10485760
+X-File-Size: 1048576
 X-File-SHA256: <必填的64位小写十六进制SHA-256>
 ```
 
-表单字段：
+接受 JPEG、PNG、WebP；单文件最多 10 MiB，最长边最多 2048 像素。服务校验扩展名、
+magic bytes、完整解码结果、实际大小与 SHA-256，并拒绝 APNG 和动画 WebP。对象路径为
+`feedback-files/{file_id}`，初始元数据状态为 `pending`。
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `file` | binary | 是 | JPEG、PNG 或 WebP 图片 |
-
-文件所有者必须从 access token 的可信 uid 取得。服务端必须检查实际大小、SHA-256、magic
-bytes 和完整解码结果，仅接受 JPEG、PNG、WebP；单个文件最多 10 MiB（10,485,760 bytes），
-最长边最多 2048 像素，并拒绝动画图片和解码炸弹。对象以 `feedback-image` 类型保存，初始
-状态为 `pending`，未绑定文件默认 24 小时后清理。
-
-首次上传成功返回 `201 Created`：
-
-```http
-Location: /api/v1/feedback-files/3fa85f64-5717-4562-b3fc-2c963f66afa6
-```
+成功响应：
 
 ```json
 {
@@ -111,84 +66,15 @@ Location: /api/v1/feedback-files/3fa85f64-5717-4562-b3fc-2c963f66afa6
   "width": 1280,
   "height": 720,
   "created_at": "2026-10-26T08:00:00Z",
-  "request_id": "req_01K5..."
+  "request_id": "req_..."
 }
 ```
 
-幂等作用域为 `用户 ID + feedback-image + Idempotency-Key`。
-
-## 5. 反馈图片内部接口
-
-内部接口使用独立监听地址和服务凭据，生产环境建议使用 mTLS；不得只依赖客户端传入的 uid
-或公网来源 IP。
-
-批量验证文件及所有者：
-
-```http
-POST /internal/feedback-files/verify
-Authorization: Service <service-credential>
-Content-Type: application/json
-```
-
-```json
-{
-  "uid": "user-id",
-  "file_ids": ["id-1", "id-2", "id-3"]
-}
-```
-
-```json
-{
-  "files": [
-    {
-      "file_id": "id-1",
-      "exists": true,
-      "owner_match": true,
-      "status": "pending",
-      "file_kind": "feedback-image",
-      "filename": "feedback.jpg",
-      "size_bytes": 1048576,
-      "sha256": "62b8...",
-      "mime_type": "image/jpeg",
-      "width": 1280,
-      "height": 720
-    }
-  ]
-}
-```
-
-绑定文件到反馈工单：
-
-```http
-POST /internal/feedback-files/claim
-Authorization: Service <service-credential>
-Content-Type: application/json
-```
-
-```json
-{
-  "uid": "user-id",
-  "feedback_id": "fb_...",
-  "file_ids": ["id-1", "id-2"]
-}
-```
-
-`claim` 必须幂等，将文件从 `pending` 改为 `bound`，同一个文件不能绑定到不同反馈。
-Feedback 最多绑定 3 张图片，每张最多 10 MiB，总大小最多 30 MiB（31,457,280 bytes）。
-
-Admin 获取图片可以使用：
-
-```http
-GET /internal/feedback-files/{file_id}
-Authorization: Service <admin-service-credential>
-```
-
-接口返回文件流，或返回有效期 1 到 5 分钟的预签名 URL。
-
-## 6. 客户端安装包上传
+## 4. 客户端安装包上传
 
 ```http
 POST /api/v1/app-releases
+Authorization: Bearer <access-token>
 Content-Type: multipart/form-data
 Idempotency-Key: 20dbfe80-a655-4f30-884f-bb51ce465632
 X-File-Size: 104857600
@@ -197,92 +83,75 @@ X-File-SHA256: <必填的64位十六进制SHA-256>
 
 表单字段：
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `file` | binary | 是 | 客户端安装包 |
-| `platform` | string | 是 | `android`、`ios`、`windows` 或 `mac` |
-| `package_type` | string | 是 | `apk`、`ipa`、`exe`、`dmg` 或 `pkg` |
-
-平台与包类型必须符合下表：
-
-| platform | package_type | 文件扩展名 |
+| 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `android` | `apk` | `.apk` |
-| `ios` | `ipa` | `.ipa` |
-| `windows` | `exe` | `.exe` |
-| `mac` | `dmg` 或 `pkg` | `.dmg` 或 `.pkg` |
+| `platform` | 是 | `android`、`ios`、`windows`、`mac` |
+| `package_type` | 是 | `apk`、`ipa`、`exe`、`dmg`、`pkg` |
+| `file` | 是 | 安装包文件；字段顺序不限 |
 
-对象路径：
+允许组合：
 
-```text
-app-releases/{platform}/{file_id}
-```
+| platform | package_type | 扩展名 |
+| --- | --- | --- |
+| android | apk | `.apk` |
+| ios | ipa | `.ipa` |
+| windows | exe | `.exe` |
+| mac | dmg / pkg | `.dmg` / `.pkg` |
 
-服务检查平台与包类型组合、扩展名、对应文件格式特征、实际大小和 SHA-256。首次上传返回：
+对象路径为 `app-releases/{platform}/{file_id}`。服务校验组合、扩展名、文件格式特征、
+实际大小和 SHA-256。响应额外包含 `platform` 和 `package_type`。当前 Access Token 没有
+管理员角色，发布权限仍由 Admin 服务控制。
 
-```json
-{
-  "file_id": "ec23b015-f836-4b3b-bc9a-66451935c7a1",
-  "file_kind": "app-release",
-  "platform": "android",
-  "package_type": "apk",
-  "filename": "app-release.apk",
-  "size": 104857600,
-  "sha256": "9a31...",
-  "created_at": "2026-09-19T16:30:00Z",
-  "request_id": "req_01K5..."
-}
-```
-
-当前阶段要求有效 access token。版本号、构建号和发布说明由 Admin 服务保存，文件服务
-只返回 `file_id` 和技术元信息。只有 Admin 服务中指定的发布账号能把已上传文件发布为生效版本。
-
-## 7. 文件下载
+## 5. 文件下载
 
 ```http
-GET  /api/v1/log-files/{file_id}
-
-GET  /api/v1/app-releases/{file_id}
-
-GET  /api/v1/feedback-files/{file_id}
+GET /api/v1/log-files/{file_id}
+GET /api/v1/feedback-files/{file_id}
+GET /api/v1/app-releases/{file_id}
 ```
 
-`GET` 支持完整下载和单段 Range：
+- 日志和反馈图片要求有效 Access Token，且 `token.UserId == owner_uid`；不存在和无权访问
+  均返回 `404 FILE_NOT_FOUND`。
+- 安装包下载公开，不依赖 Access Token。
+- 支持完整下载和单段 `Range: bytes=start-end`；成功分别返回 200 或 206，无效 Range
+  返回 416。
+- MinIO Bucket 保持私有，客户端只通过文件服务读取。
+
+## 6. 内部反馈图片接口
+
+内部服务监听独立的回环地址 `INTERNAL_HTTP_ADDR`，不通过公网 OpenResty。当前阶段按约定
+暂不校验服务凭据，Admin 读取图片：
 
 ```http
-Range: bytes=0-1048575
+GET /internal/feedback-files/{file_id}
 ```
 
-- 完整下载：`200 OK`
-- 合法 Range：`206 Partial Content`
-- 文件不存在：`404 Not Found`
-- Range 不合法：`416 Range Not Satisfiable`
+返回文件流并支持单段 Range。`POST /internal/feedback-files/verify` 与
+`POST /internal/feedback-files/claim` 按当前迭代要求暂不实现；在 claim 生命周期实现前，
+pending 文件自动清理也不启用。
 
-日志和反馈图片的 `GET` 要求有效 access token，并且只能访问本人上传的文件。安装包的 `GET` 是公开
-接口，便于未登录或 token 已过期的客户端完成升级。诊断日志和安装包流程仍直接接收前端
-提交的上传结果元信息，不回查文件服务；Feedback 将诊断日志元信息按客户端未验证数据保存。
-反馈图片例外：Feedback 必须通过内部 `verify` 和 `claim` 接口确认文件、所有者和可信元数据。
-MinIO Bucket 始终保持私有，文件只能经过文件服务下载。
+## 7. 通用错误
 
-## 8. 通用错误
+| HTTP | code | 场景 |
+| ---: | --- | --- |
+| 400 | `INVALID_REQUEST` | 请求头、表单、平台组合或幂等键无效 |
+| 400 | `CHECKSUM_REQUIRED` | 反馈图片或安装包未提供 SHA-256 |
+| 401 | `AUTH_TOKEN_MISSING/INVALID/EXPIRED` | 用户 Token 鉴权失败 |
+| 404 | `FILE_NOT_FOUND` | 文件不存在或用户不是所有者 |
+| 409 | `IDEMPOTENCY_CONFLICT` | 幂等键对应不同请求 |
+| 409 | `UPLOAD_IN_PROGRESS` | 相同幂等请求正在处理 |
+| 413 | `FILE_TOO_LARGE` | 超过资源大小限制 |
+| 415 | `UNSUPPORTED_FILE_TYPE` | 文件类型、格式或图片约束不符合要求 |
+| 416 | `INVALID_RANGE` | Range 无效 |
+| 422 | `FILE_SIZE_MISMATCH` | 实际大小不符 |
+| 422 | `CHECKSUM_MISMATCH` | SHA-256 不符 |
+| 503 | `STORAGE_UNAVAILABLE` | MinIO 不可用 |
 
-| HTTP 状态 | 错误码 | 场景 |
-| --- | --- | --- |
-| `400` | `INVALID_REQUEST` | 请求头、表单或幂等键不合法 |
-| `400` | `CHECKSUM_REQUIRED` | 安装包未提供 SHA-256 |
-| `409` | `IDEMPOTENCY_CONFLICT` | 幂等键对应不同文件 |
-| `409` | `UPLOAD_IN_PROGRESS` | 相同幂等请求正在处理 |
-| `413` | `FILE_TOO_LARGE` | 超过对应资源的大小限制 |
-| `415` | `UNSUPPORTED_FILE_TYPE` | 文件扩展名或 magic bytes 不匹配 |
-| `422` | `FILE_SIZE_MISMATCH` | 实际大小与声明大小不一致 |
-| `422` | `CHECKSUM_MISMATCH` | 实际 SHA-256 不一致 |
-| `503` | `STORAGE_UNAVAILABLE` | MinIO 不可用 |
-
-## 9. 健康检查
+## 8. 健康检查
 
 ```http
 GET /health/live
 GET /health/ready
 ```
 
-`ready` 会检查 MinIO Bucket 是否可用。
+`ready` 检查 MinIO Bucket 可用性。
