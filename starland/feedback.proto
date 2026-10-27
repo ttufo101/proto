@@ -18,7 +18,7 @@ service Feedback {
   rpc AdminUpdateFeedbackStatus (FeedbackAdminUpdateStatusRequest) returns (FeedbackAdminUpdateStatusResponse);
 }
 
-// FeedbackAttachment 是客户端提交的未验证附件元数据。
+// FeedbackAttachment 是反馈图片附件。客户端提交的元数据未经验证；url 仅由服务端在管理端详情响应中填写。
 message FeedbackAttachment {
   string file_id = 1;
   string file_name = 2;
@@ -29,6 +29,7 @@ message FeedbackAttachment {
   uint32 width = 7;
   uint32 height = 8;
   uint32 sort_order = 9;
+  string url = 10;  // 公开图片地址；客户端提交时忽略，不写入数据库。
 }
 
 message SubmitFeedbackRequest {

@@ -110,8 +110,11 @@ GET /api/v1/feedback-files/{file_id}
 GET /api/v1/app-releases/{file_id}
 ```
 
-- 日志和反馈图片要求有效 Access Token，且 `token.UserId == owner_uid`；不存在和无权访问
-  均返回 `404 FILE_NOT_FOUND`。
+- 日志要求有效 Access Token，且 `token.UserId == owner_uid`；不存在和无权访问均返回
+  `404 FILE_NOT_FOUND`。
+- 反馈图片当前按 `file_id` 公开读取，不要求 Access Token。`file_id` 使用不可预测的 UUID，获得完整
+  URL 即可读取图片；该 URL 可由 Admin 反馈详情接口返回。当前版本不使用签名或过期时间，后续可在
+  不改变响应字段的情况下升级为短期签名 URL。
 - 安装包下载公开，不依赖 Access Token。
 - 支持完整下载和单段 `Range: bytes=start-end`；成功分别返回 200 或 206，无效 Range
   返回 416。

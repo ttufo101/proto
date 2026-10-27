@@ -8,6 +8,9 @@ service Starcore {
   // 按客户端平台和当前版本检查是否需要升级；公开接口，不依赖登录态。
   rpc CheckUpdate (CheckUpdateRequest) returns (CheckUpdateResponse);
 
+  // 获取当前最新的已发布公告；公开接口，不依赖登录态。没有已发布公告时返回空响应。
+  rpc GetCurrentAnnouncement (GetCurrentAnnouncementRequest) returns (GetCurrentAnnouncementResponse);
+
   // 查询当前登录用户可展示和可购买的套餐列表。
   rpc GetPlans (GetPlansRequest) returns (GetPlansResponse);
 
@@ -43,6 +46,20 @@ service Starcore {
 
   // 供 Admin 幂等调整现有订阅；不经 Gateway 对外开放。
   rpc AdjustSubscription (AdjustSubscriptionRequest) returns (AdjustSubscriptionResponse);
+}
+
+message GetCurrentAnnouncementRequest {
+}
+
+message CurrentAnnouncement {
+  uint64 id = 1;                              // 公告稳定 ID。
+  string title = 2;                           // 公告标题。
+  string content = 3;                         // 允许换行的纯文本公告正文。
+  int64 published_at = 4 [jstype = JS_NUMBER]; // 最近发布时间，Unix 秒级时间戳。
+}
+
+message GetCurrentAnnouncementResponse {
+  CurrentAnnouncement announcement = 1; // 没有已发布公告时为空。
 }
 
 message CheckUpdateRequest {
