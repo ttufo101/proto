@@ -110,26 +110,30 @@ GET /api/v1/feedback-files/{file_id}
 GET /api/v1/app-releases/{file_id}
 ```
 
-- 日志要求有效 Access Token，且 `token.UserId == owner_uid`；不存在和无权访问均返回
-  `404 FILE_NOT_FOUND`。
-- 反馈图片当前按 `file_id` 公开读取，不要求 Access Token。`file_id` 使用不可预测的 UUID，获得完整
-  URL 即可读取图片；该 URL 可由 Admin 反馈详情接口返回。当前版本不使用签名或过期时间，后续可在
-  不改变响应字段的情况下升级为短期签名 URL。
+- 日志和反馈图片要求有效 Access Token，且 `token.UserId == owner_uid`；不存在和无权访问
+  均返回 `404 FILE_NOT_FOUND`。
 - 安装包下载公开，不依赖 Access Token。
 - 支持完整下载和单段 `Range: bytes=start-end`；成功分别返回 200 或 206，无效 Range
   返回 416。
 - MinIO Bucket 保持私有，客户端只通过文件服务读取。
 
-## 6. 内部反馈图片接口
+## 6. 内部管理读取接口
 
-内部服务监听独立的回环地址 `INTERNAL_HTTP_ADDR`，不通过公网 OpenResty。当前阶段按约定
-暂不校验服务凭据，Admin 读取图片：
+内部服务监听独立的回环地址 `INTERNAL_HTTP_ADDR`；公网 OpenResty 对 `/internal/` 显式
+返回 404。当前阶段按约定
+暂不校验服务凭据，Admin 后端可读取终端用户上传的日志和反馈图片：
 
 ```http
+GET /internal/log-files/{file_id}
 GET /internal/feedback-files/{file_id}
 ```
 
-返回文件流并支持单段 Range。`POST /internal/feedback-files/verify` 与
+内部接口不执行 `token.UserId == owner_uid` 校验，返回文件流并支持单段 Range。Admin 浏览器
+不得直接访问内部接口；Admin 后端必须先校验管理员身份及其对反馈工单的访问权限，再根据工单
+保存的 `file_id` 调用内部接口，并记录管理员 ID、工单 ID、文件 ID、访问时间和结果。不得记录
+Access Token 或文件内容。
+
+`POST /internal/feedback-files/verify` 与
 `POST /internal/feedback-files/claim` 按当前迭代要求暂不实现；在 claim 生命周期实现前，
 pending 文件自动清理也不启用。
 
