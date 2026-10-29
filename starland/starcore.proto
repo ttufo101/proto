@@ -163,6 +163,7 @@ message GetLinksRequest {
 message GetLinksResponse {
   string content = 1; // 数据库中当前代理配置内容的 base64 编码，客户端需先解码再使用。
   bool has_subscription = 2; // 当前用户是否拥有未过期或未耗尽的有效套餐权益。
+  string selected_node_id = 3; // 本次选择的中转节点，便于诊断；客户端不得据此上报健康状态。
 }
 
 message ChangePasswordRequest {

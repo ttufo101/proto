@@ -53,6 +53,12 @@ service Admin {
   // 轮换数据面中转节点密码，新密码只在本次响应中返回。
   rpc RotateDataPlaneNodePassword (RotateDataPlaneNodePasswordRequest) returns (RotateDataPlaneNodePasswordResponse);
 
+  // 查询用户当前是否被固定到指定中转节点。
+  rpc GetUserRelayAssignment (GetUserRelayAssignmentRequest) returns (GetUserRelayAssignmentResponse);
+
+  // 设置或清除用户的固定中转节点。
+  rpc SetUserRelayAssignment (SetUserRelayAssignmentRequest) returns (SetUserRelayAssignmentResponse);
+
   // 查询所有套餐共享的连接性能和覆盖权益配置。
   rpc GetSharedPlanBenefitsConfig (GetSharedPlanBenefitsConfigRequest) returns (GetSharedPlanBenefitsConfigResponse);
 
@@ -347,6 +353,13 @@ message DataPlaneNode {
   int64 last_seen_at = 4 [jstype = JS_NUMBER];
   int64 created_at = 5 [jstype = JS_NUMBER];
   int64 updated_at = 6 [jstype = JS_NUMBER];
+  string advertise_host = 7;
+  string runtime_status = 8;    // unknown / online / offline。
+  string scheduling_status = 9; // active / draining / isolated / disabled。
+  int64 started_at = 10 [jstype = JS_NUMBER];
+  int64 heartbeat_at = 11 [jstype = JS_NUMBER];
+  int64 offline_at = 12 [jstype = JS_NUMBER];
+  string offline_reason = 13;
 }
 
 message ListDataPlaneNodesResponse {
@@ -367,6 +380,8 @@ message UpdateDataPlaneNodeRequest {
   string node_id = 1;
   string display_name = 2;
   bool enabled = 3;
+  string advertise_host = 4;
+  string scheduling_status = 5; // active / draining / isolated / disabled。
 }
 
 message UpdateDataPlaneNodeResponse {
@@ -380,6 +395,28 @@ message RotateDataPlaneNodePasswordRequest {
 message RotateDataPlaneNodePasswordResponse {
   bool success = 1;
   string node_password = 2; // 只返回一次，服务端不保存明文。
+}
+
+message GetUserRelayAssignmentRequest {
+  string uid = 1;
+}
+
+message GetUserRelayAssignmentResponse {
+  bool assigned = 1;
+  string uid = 2;
+  string node_id = 3;
+  bool allow_fallback = 4;
+  int64 updated_at = 5 [jstype = JS_NUMBER];
+}
+
+message SetUserRelayAssignmentRequest {
+  string uid = 1;
+  string node_id = 2; // 空字符串表示清除固定分配。
+  bool allow_fallback = 3;
+}
+
+message SetUserRelayAssignmentResponse {
+  bool success = 1;
 }
 
 message GetSharedPlanBenefitsConfigRequest {

@@ -6,8 +6,41 @@ option go_package = "github.com/ttufo101/api/starland;starland";
 
 // DataPlane 提供中转 Mihomo 经 Gateway 调用的节点鉴权和流量计量接口。
 service Dataplane {
+  // Mihomo 完成监听初始化后经 Gateway 上报节点上线。
+  rpc NodeOnline (NodeOnlineRequest) returns (NodeOnlineResponse);
+  // Mihomo 经 Gateway 周期上报存活状态。
+  rpc Heartbeat (NodeHeartbeatRequest) returns (NodeHeartbeatResponse);
+  // Mihomo 正常退出前经 Gateway 主动上报离线。
+  rpc NodeOffline (NodeOfflineRequest) returns (NodeOfflineResponse);
   rpc AuthorizeUser (AuthorizeUserRequest) returns (AuthorizeUserResponse);
   rpc ReportUsage (ReportUsageRequest) returns (ReportUsageResponse);
+}
+
+message NodeOnlineRequest {
+  string boot_id = 1;
+}
+
+message NodeOnlineResponse {
+  bool accepted = 1;
+  int64 server_time = 2;
+}
+
+message NodeHeartbeatRequest {
+  string boot_id = 1;
+}
+
+message NodeHeartbeatResponse {
+  bool accepted = 1;
+  int64 server_time = 2;
+}
+
+message NodeOfflineRequest {
+  string boot_id = 1;
+  string reason = 2;
+}
+
+message NodeOfflineResponse {
+  bool accepted = 1;
 }
 
 message AuthorizeUserRequest {
